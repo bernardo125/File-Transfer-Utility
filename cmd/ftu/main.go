@@ -1,9 +1,16 @@
 package main
 
 import (
-	"fmt"
+	stundiscover "cmd/ftu/main.go/internal/stun-discover"
 )
 
 func main() {
-	fmt.Printf("Hello, World!")
+	var DefaultSTUNServers = []string{
+		"stun.l.google.com:19302",
+		"stun1.l.google.com:19302",
+		"stun.cloudflare.com:3478",
+	}
+	stunClient := stundiscover.Client{}
+
+	stunClient.sendBindingRequest(DefaultSTUNServers[0])
 }

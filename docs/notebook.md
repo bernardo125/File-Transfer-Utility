@@ -10,7 +10,7 @@ A solução para isso é através do protocolo STUN (session travessal utilities
 **O objetivo desta utility é nunca depender de qualquer tipo de servidor externo (para além do stun que já há gratuitos públicos), daí o servidor de signaling (intermediador incial enquanto a comunicação entre os peers nao é estabelecida) normalmente usado neste tipo de arquiteturas vai ser omitido.**
 
 ## A SOLUCAO: KEY TROCADA ENTRE PEERS
-Na verdade este será encriptado (por exemplo por SHA256), juntamente com outras informações como palavra passe da sessao, e vai passar por uma função de hash na base64 para obter uma key simples.
+Na verdade este será encriptado (por exemplo por AES-GCM), juntamente com outras informações como palavra passe da sessao, e vai passar por uma função de hash na base64 para obter uma key simples.
 
 Esta key é fundamental para a comunicação. Cada peer deverá enviar esta key ao outro peer, por um outro qualquer tipo de meio de comunicação seguro (tipo whatsapp, discord - neste caso vai ser tipo um server de "signaling" manual) e esta key permitirá os peer poderem se encontrar. Isto irá permitir reduzir infraestrutura (basta os peers e o server de STUN), através de um código simples tal como uma chave de um lobby de uma sala de um jogo online.
 
