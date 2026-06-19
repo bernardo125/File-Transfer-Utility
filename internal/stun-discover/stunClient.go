@@ -11,14 +11,14 @@ import (
 
 // Stun protocol header constants
 const stunMessageType uint16 = 0x0001     // 1  -> binding  request
-const stunMagicCookie uint32 = 0x2112A442 //fixed constant used by STUN so servers can recognize and validate the packet
+const stunMagicCookie uint32 = 0x2112A442 // fixed constant used by STUN so servers can recognize and validate the packet (definied by RFC 538 law)
 const stunRequestHeaderLength int8 = 20   // fixed 20 bytes for simples STUN binding request
 const stunTransactionIdLength int8 = 12   // 12 random bytes used to match the response with the correct request
 
 // STUN CLIENT -> with all stun binding logic
 type StunClient interface {
 	buildBindingRequest(txID [12]byte) []byte
-	sendBindingRequest(stunAddr string) (PublicEndpoint, error)
+	SendBindingRequest(stunAddr string) (PublicEndpoint, error) // PUBLIC FUNCS START WITH CAPS
 	parseXORMappedAddress(val []byte) (PublicEndpoint, error)
 }
 
@@ -39,7 +39,7 @@ func (c Client) buildBindingRequest(transaction_ID [12]byte) []byte {
 	return header
 }
 
-func (c Client) sendBindingRequest(stunAddr string) (PublicEndpoint, error) {
+func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 	addr, err := net.ResolveUDPAddr("udp", stunAddr) // udp = ipv4 and ipv6
 	if err != nil {
 		log.Fatalf("Error resolving: %s", stunAddr)
@@ -73,10 +73,12 @@ func (c Client) sendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 		log.Printf("Receive error: %v", err)
 		return PublicEndpoint{}, err
 	}
-	fmt.Printf("Server says: %s\n", string(buffer[:n]))
+	fmt.Printf("Server says: %x\n", buffer[:n])
 	return parseXORMappedAddress(buffer)
 }
 
+// first 8 bytes are message type and message length
+// 4 bytes for messsage cookie
 func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
 	panic("unimplemented")
 }

@@ -12,5 +12,5 @@ func main() {
 	}
 	stunClient := stundiscover.Client{}
 
-	stunClient.sendBindingRequest(DefaultSTUNServers[0])
+	stunClient.SendBindingRequest(DefaultSTUNServers[0])
 }
