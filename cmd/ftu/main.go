@@ -1,7 +1,9 @@
 package main
 
 import (
+	encryption "cmd/ftu/main.go/internal/encryption"
 	stundiscover "cmd/ftu/main.go/internal/stun-discover"
+	"encoding/hex"
 )
 
 func main() {
@@ -12,5 +14,8 @@ func main() {
 	}
 	stunClient := stundiscover.Client{}
 
-	stunClient.SendBindingRequest(DefaultSTUNServers[0])
+	response, _ := stunClient.SendBindingRequest(DefaultSTUNServers[0])
+	key, _ := hex.DecodeString("6368616e676520746869732070617373776f726420746f206120736563726574")
+	encryption.AesgsmEncryct(key, &response)
+
 }

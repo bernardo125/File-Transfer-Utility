@@ -12,7 +12,7 @@ import (
 )
 
 // based on https://pkg.go.dev/crypto/cipher#NewGCM  examples
-func aesgsmEncryct(key []byte, endpoint *stundiscover.PublicEndpoint) (nonce []byte, ciphertext []byte) {
+func AesgsmEncryct(key []byte, endpoint *stundiscover.PublicEndpoint) (nonce []byte, ciphertext []byte) {
 	// encode Public Endpoint struct to byte buffer
 	var endpointInBytes bytes.Buffer
 	enc := gob.NewEncoder(&endpointInBytes)
@@ -32,7 +32,7 @@ func aesgsmEncryct(key []byte, endpoint *stundiscover.PublicEndpoint) (nonce []b
 		log.Fatal(err)
 	}
 
-	// nonce (number used ince) is a random number used only 1 time to AES
+	// nonce (number used ince) is a random number used only 1 time to AES (IV — Initialization Vector)
 	// Never use more than 2^32 random nonces with a given key because of the risk of a repeat
 	nonce = make([]byte, aesgcm.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
@@ -41,5 +41,5 @@ func aesgsmEncryct(key []byte, endpoint *stundiscover.PublicEndpoint) (nonce []b
 
 	ciphertext = aesgcm.Seal(nil, nonce, endpointInBytes.Bytes(), nil)
 	fmt.Printf("%x\n", ciphertext)
-	panic("unimplemented")
+	return nonce, ciphertext
 }
