@@ -24,7 +24,8 @@ type StunClient interface {
 
 // PublicEndpoint -> reponse by stun server
 type PublicEndpoint struct {
-	response string
+	ip   uint32
+	port uint16
 }
 
 // StunClient implementation
@@ -70,15 +71,45 @@ func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 	buffer := make([]byte, 512)
 	n, _, err := conn.ReadFromUDP(buffer)
 	if err != nil {
-		log.Printf("Receive error: %v", err)
+		log.Fatal("Receive error: ", err)
 		return PublicEndpoint{}, err
 	}
+	//TODO : TO REMOVE===========================================================================
 	fmt.Printf("Server says: %x\n", buffer[:n])
 	return parseXORMappedAddress(buffer)
 }
 
 // first 8 bytes are message type and message length
 // 4 bytes for messsage cookie
+// last 6 bytes are port and ip (2 bytes = port, 4 bytes = ip)
 func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
-	panic("unimplemented")
+	// plus 2 because of type on message atribute
+	const family_ipv4 byte = 0x01
+	const STUN_ATTR_XOR_MAPPED_ADDRESS uint16 = 0x0020
+
+	attr_type := binary.BigEndian.Uint16(buffer[stunRequestHeaderLength : stunRequestHeaderLength+2])
+	attr_len := int8(binary.BigEndian.Uint16(buffer[stunRequestHeaderLength+2 : stunRequestHeaderLength+4]))
+
+	if attr_type != STUN_ATTR_XOR_MAPPED_ADDRESS {
+		log.Fatal("This is not RESPONSE-ADDRESS message type")
+		return PublicEndpoint{}, fmt.Errorf("this is not RESPONSE-ADDRESS message type")
+	}
+	// plus 4 to jump to message atribute value
+	payload := buffer[stunRequestHeaderLength+4 : stunRequestHeaderLength+attr_len+4]
+	family := payload[1]
+
+	if family != family_ipv4 {
+		return PublicEndpoint{}, fmt.Errorf("unsupported family: %d", family)
+	}
+
+	// port is XORed with the top 16 bits of the magic cookie
+	raw_port := binary.BigEndian.Uint16(payload[2:4])
+	port := raw_port ^ uint16(stunMagicCookie>>16)
+
+	// ip is XORed with the full magic cookie
+	raw_ip := binary.BigEndian.Uint32(payload[4:8])
+	ip := raw_ip ^ stunMagicCookie // uint32
+	//TODO : TO REMOVE===========================================================================
+	fmt.Printf("%d.%d.%d.%d:%d\n", byte(ip>>24), byte(ip>>16), byte(ip>>8), byte(ip), int(port))
+	return PublicEndpoint{ip: ip, port: port}, nil
 }

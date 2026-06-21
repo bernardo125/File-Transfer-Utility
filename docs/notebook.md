@@ -31,3 +31,5 @@ A resposta é não. O STUN permite resolver muitos problemas, no entanto, no cas
 
 Por isso, é provável quem esteja nesta situação esta utility não vai funcionar, isto é , cerca de 15%-20% dos utilizadores da internet
 
+## Encriptação da Key
+Para garantir segurança e para não haver alterações na chave enviada entre os peers optou-se por encriptar a chave através de AES-GCM. O motivo do uso deste mecanismo é devido á sua alta compatibilidade, garante boa segurança e deteta se houve alterações nos dados (autenticidade). Funciona por encriptação simétrica, o que é essencial para esta aplicação (assim os dois peers podem obter os valores não encriptados). 
