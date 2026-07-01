@@ -3,7 +3,6 @@ package stundiscover
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"net"
 	"time"
@@ -67,12 +66,11 @@ func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 	// Wait for reply of stun server with timeout - 5 sec timeout
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	buffer := make([]byte, 512)
-	n, _, err := conn.ReadFromUDP(buffer)
+	_, _, err = conn.ReadFromUDP(buffer)
 	if err != nil {
 		log.Fatal("Receive error: ", err)
 	}
 	//TODO : TO REMOVE===========================================================================
-	fmt.Printf("Server says: %x\n", buffer[:n])
 	return parseXORMappedAddress(buffer)
 }
 
@@ -106,6 +104,5 @@ func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
 	raw_ip := binary.BigEndian.Uint32(payload[4:8])
 	ip := raw_ip ^ stunMagicCookie // uint32
 	//TODO : TO REMOVE===========================================================================
-	fmt.Printf("%d.%d.%d.%d:%d\n", byte(ip>>24), byte(ip>>16), byte(ip>>8), byte(ip), int(port))
 	return PublicEndpoint{Ip: ip, Port: port}, nil
 }

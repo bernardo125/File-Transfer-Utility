@@ -1,23 +1,16 @@
 package main
 
 import (
-	encryption "cmd/ftu/main.go/internal/signaling"
-	stundiscover "cmd/ftu/main.go/internal/stun-discover"
-	"encoding/hex"
+	token "cmd/ftu/main.go/internal/signaling"
+	"fmt"
 )
 
 func main() {
-	var DefaultSTUNServers = []string{
-		"stun.l.google.com:19302",
-		"stun1.l.google.com:19302",
-		"stun.cloudflare.com:3478",
-	}
-	stunClient := stundiscover.Client{}
 
-	response, _ := stunClient.SendBindingRequest(DefaultSTUNServers[0])
-	key, _ := hex.DecodeString("6368616e676520746869732070617373776f726420746f206120736563726574")
-	nonce, ciphertext := encryption.AesgsmEncryct(key, &response)
+	key := token.CreateKey()
+	fmt.Printf("KEY: %s\n", key)
 
-	encryption.AesgsmDecryct(key, nonce, ciphertext)
+	result := token.GetPeer(key)
+	fmt.Printf("RESULT: %x\n", *result)
 
 }
