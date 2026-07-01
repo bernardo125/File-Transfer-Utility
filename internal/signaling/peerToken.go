@@ -43,3 +43,33 @@ func AesgsmEncryct(key []byte, endpoint *stundiscover.PublicEndpoint) (nonce []b
 	fmt.Printf("%x\n", ciphertext)
 	return nonce, ciphertext
 }
+
+func AesgsmDecryct(key []byte, nonce []byte, ciphertext []byte) (otherPeerEndpoint *stundiscover.PublicEndpoint) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// Decode struct
+	bytesToPeerEndpoint := bytes.NewBuffer(plaintext)
+	decEndpoint := gob.NewDecoder(bytesToPeerEndpoint)
+
+	var endpoint stundiscover.PublicEndpoint
+	err = decEndpoint.Decode(&endpoint)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	fmt.Printf("%x\n", endpoint)
+
+	return &endpoint
+}
