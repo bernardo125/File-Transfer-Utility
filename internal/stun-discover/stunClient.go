@@ -3,7 +3,6 @@ package stundiscover
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"net"
 	"time"
@@ -23,9 +22,10 @@ type StunClient interface {
 }
 
 // PublicEndpoint -> reponse by stun server
+// gob only serialize in uppercase 1 character
 type PublicEndpoint struct {
-	ip   uint32
-	port uint16
+	Ip   uint32
+	Port uint16
 }
 
 // StunClient implementation
@@ -44,14 +44,12 @@ func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 	addr, err := net.ResolveUDPAddr("udp", stunAddr) // udp = ipv4 and ipv6
 	if err != nil {
 		log.Fatalf("Error resolving: %s", stunAddr)
-		return PublicEndpoint{}, err
 	}
 
 	conn, err := net.DialUDP("udp", nil, addr) // udp =  ipv4 and ipv6
 
 	if err != nil {
 		log.Fatal("Connection failed: ", err)
-		return PublicEndpoint{}, err
 	}
 	defer conn.Close() // defers the close of connection until the surrounding function returns
 
@@ -63,19 +61,16 @@ func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 
 	if err != nil {
 		log.Fatal("Error sending message to Stun server", err)
-		return PublicEndpoint{}, err
 	}
 
 	// Wait for reply of stun server with timeout - 5 sec timeout
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	buffer := make([]byte, 512)
-	n, _, err := conn.ReadFromUDP(buffer)
+	_, _, err = conn.ReadFromUDP(buffer)
 	if err != nil {
 		log.Fatal("Receive error: ", err)
-		return PublicEndpoint{}, err
 	}
 	//TODO : TO REMOVE===========================================================================
-	fmt.Printf("Server says: %x\n", buffer[:n])
 	return parseXORMappedAddress(buffer)
 }
 
@@ -92,14 +87,13 @@ func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
 
 	if attr_type != STUN_ATTR_XOR_MAPPED_ADDRESS {
 		log.Fatal("This is not RESPONSE-ADDRESS message type")
-		return PublicEndpoint{}, fmt.Errorf("this is not RESPONSE-ADDRESS message type")
 	}
 	// plus 4 to jump to message atribute value
 	payload := buffer[stunRequestHeaderLength+4 : stunRequestHeaderLength+attr_len+4]
 	family := payload[1]
 
 	if family != family_ipv4 {
-		return PublicEndpoint{}, fmt.Errorf("unsupported family: %d", family)
+		log.Fatalf("unsupported family: %d", family)
 	}
 
 	// port is XORed with the top 16 bits of the magic cookie
@@ -110,6 +104,5 @@ func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
 	raw_ip := binary.BigEndian.Uint32(payload[4:8])
 	ip := raw_ip ^ stunMagicCookie // uint32
 	//TODO : TO REMOVE===========================================================================
-	fmt.Printf("%d.%d.%d.%d:%d\n", byte(ip>>24), byte(ip>>16), byte(ip>>8), byte(ip), int(port))
-	return PublicEndpoint{ip: ip, port: port}, nil
+	return PublicEndpoint{Ip: ip, Port: port}, nil
 }
