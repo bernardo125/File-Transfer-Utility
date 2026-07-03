@@ -21,10 +21,10 @@ var DefaultSTUNServers = []string{
 var secret, _ = hex.DecodeString("6368616e676520746869732070617373776f726420746f206120736563726574")
 
 // Orchestrate encryptation and base64 codification
-func CreateKey() (key string) {
+func CreateKey(conn *net.UDPConn) (key string) {
 	stunClient := stundiscover.Client{}
-	response, _ := stunClient.SendBindingRequest(DefaultSTUNServers[0])
-	nonce, ciphertext := aesgsmEncryct(secret, response)
+	stun_response, _ := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
+	nonce, ciphertext := aesgsmEncryct(secret, nil, stun_response)
 	finalPacket := append(nonce, ciphertext...)
 	key = base64Enconding(finalPacket)
 	return key
@@ -39,7 +39,7 @@ func GetPeer(key string) (peer *net.UDPAddr) {
 
 // ENCRYPTATION BASED ON AES-GCM
 // based on https://pkg.go.dev/crypto/cipher#NewGCM  examples
-func aesgsmEncryct(secret []byte, endpoint *net.UDPAddr) (nonce []byte, ciphertext []byte) {
+func aesgsmEncryct(secret []byte, local *net.UDPAddr, public *net.UDPAddr) (nonce []byte, ciphertext []byte) {
 	block, err := aes.NewCipher(secret)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -57,18 +57,18 @@ func aesgsmEncryct(secret []byte, endpoint *net.UDPAddr) (nonce []byte, cipherte
 		panic(err.Error())
 	}
 
-	endpointInBytes := endpointEncode(endpoint)
+	endpointInBytes := endpointEncode(local, public)
 
 	ciphertext = aesgcm.Seal(nil, nonce, endpointInBytes, nil)
 	return nonce, ciphertext
 }
 
-func endpointEncode(endpoint *net.UDPAddr) (encodedEndpoint []byte) {
+func endpointEncode(local *net.UDPAddr, public *net.UDPAddr) (encodedEndpoint []byte) {
 	// encode Public Endpoint struct to byte buffer
 	var endpointInBytes bytes.Buffer
 	enc := gob.NewEncoder(&endpointInBytes)
 
-	err := enc.Encode(endpoint)
+	err := enc.Encode(public)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

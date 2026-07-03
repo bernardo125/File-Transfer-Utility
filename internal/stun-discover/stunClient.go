@@ -34,24 +34,17 @@ func (c Client) buildBindingRequest(transaction_ID [12]byte) []byte {
 }
 
 // for now this func returns the response from stun server
-func (c Client) SendBindingRequest(stunAddr string) (*net.UDPAddr, error) {
+func (c Client) SendBindingRequest(conn *net.UDPConn, stunAddr string) (*net.UDPAddr, error) {
 	addr, err := net.ResolveUDPAddr("udp", stunAddr) // udp = ipv4 and ipv6
 	if err != nil {
 		log.Fatalf("Error resolving: %s", stunAddr)
 	}
 
-	conn, err := net.DialUDP("udp", nil, addr) // udp =  ipv4 and ipv6
-
-	if err != nil {
-		log.Fatal("Connection failed: ", err)
-	}
-	defer conn.Close() // defers the close of connection until the surrounding function returns
-
 	// build and send stun binding request
 	var transaction_ID = make([]byte, stunTransactionIdLength)
 	rand.Read(transaction_ID)
 	header := c.buildBindingRequest([12]byte(transaction_ID)) // returns header request binding
-	_, err = conn.Write(header)
+	_, err = conn.WriteTo(header, addr)
 
 	if err != nil {
 		log.Fatal("Error sending message to Stun server", err)
