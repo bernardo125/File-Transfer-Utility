@@ -10,6 +10,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"log"
+	"net"
 )
 
 var DefaultSTUNServers = []string{
@@ -23,13 +24,13 @@ var secret, _ = hex.DecodeString("6368616e676520746869732070617373776f726420746f
 func CreateKey() (key string) {
 	stunClient := stundiscover.Client{}
 	response, _ := stunClient.SendBindingRequest(DefaultSTUNServers[0])
-	nonce, ciphertext := aesgsmEncryct(secret, &response)
+	nonce, ciphertext := aesgsmEncryct(secret, response)
 	finalPacket := append(nonce, ciphertext...)
 	key = base64Enconding(finalPacket)
 	return key
 }
 
-func GetPeer(key string) (peer *stundiscover.PublicEndpoint) {
+func GetPeer(key string) (peer *net.UDPAddr) {
 	decodedBytes := base64Decoding(key)
 	nonce := decodedBytes[:12] // nonce is 12 bytes
 	cipherText := decodedBytes[12:]
@@ -38,7 +39,7 @@ func GetPeer(key string) (peer *stundiscover.PublicEndpoint) {
 
 // ENCRYPTATION BASED ON AES-GCM
 // based on https://pkg.go.dev/crypto/cipher#NewGCM  examples
-func aesgsmEncryct(secret []byte, endpoint *stundiscover.PublicEndpoint) (nonce []byte, ciphertext []byte) {
+func aesgsmEncryct(secret []byte, endpoint *net.UDPAddr) (nonce []byte, ciphertext []byte) {
 	block, err := aes.NewCipher(secret)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -62,7 +63,7 @@ func aesgsmEncryct(secret []byte, endpoint *stundiscover.PublicEndpoint) (nonce 
 	return nonce, ciphertext
 }
 
-func endpointEncode(endpoint *stundiscover.PublicEndpoint) (encodedEndpoint []byte) {
+func endpointEncode(endpoint *net.UDPAddr) (encodedEndpoint []byte) {
 	// encode Public Endpoint struct to byte buffer
 	var endpointInBytes bytes.Buffer
 	enc := gob.NewEncoder(&endpointInBytes)
@@ -74,7 +75,7 @@ func endpointEncode(endpoint *stundiscover.PublicEndpoint) (encodedEndpoint []by
 	return endpointInBytes.Bytes()
 }
 
-func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (otherPeerEndpoint *stundiscover.PublicEndpoint) {
+func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (otherPeerEndpoint *net.UDPAddr) {
 	block, err := aes.NewCipher(secret)
 	if err != nil {
 		panic(err.Error())
@@ -95,12 +96,12 @@ func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (otherPeerEnd
 	return endpoint
 }
 
-func endpointDecode(encodedText []byte) (decodedEndpoint *stundiscover.PublicEndpoint) {
+func endpointDecode(encodedText []byte) (decodedEndpoint *net.UDPAddr) {
 	// Decode byte buffer to Public Endpoint struct
 	bytesToPeerEndpoint := bytes.NewBuffer(encodedText)
 	decEndpoint := gob.NewDecoder(bytesToPeerEndpoint)
 
-	var endpoint stundiscover.PublicEndpoint
+	var endpoint net.UDPAddr
 	err := decEndpoint.Decode(&endpoint)
 	if err != nil {
 		log.Fatal(err.Error())

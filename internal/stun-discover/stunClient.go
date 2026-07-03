@@ -17,15 +17,8 @@ const stunTransactionIdLength int8 = 12   // 12 random bytes used to match the r
 // STUN CLIENT -> with all stun binding logic
 type StunClient interface {
 	buildBindingRequest(txID [12]byte) []byte
-	SendBindingRequest(stunAddr string) (PublicEndpoint, error) // PUBLIC FUNCS START WITH CAPS
-	parseXORMappedAddress(val []byte) (PublicEndpoint, error)
-}
-
-// PublicEndpoint -> reponse by stun server
-// gob only serialize in uppercase 1 character
-type PublicEndpoint struct {
-	Ip   uint32
-	Port uint16
+	SendBindingRequest(stunAddr string) (*net.UDPAddr, error) // PUBLIC FUNCS START WITH CAPS
+	parseXORMappedAddress(val []byte) (*net.UDPAddr, error)
 }
 
 // StunClient implementation
@@ -41,7 +34,7 @@ func (c Client) buildBindingRequest(transaction_ID [12]byte) []byte {
 }
 
 // for now this func returns the response from stun server
-func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
+func (c Client) SendBindingRequest(stunAddr string) (*net.UDPAddr, error) {
 	addr, err := net.ResolveUDPAddr("udp", stunAddr) // udp = ipv4 and ipv6
 	if err != nil {
 		log.Fatalf("Error resolving: %s", stunAddr)
@@ -77,7 +70,8 @@ func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 // first 8 bytes are message type and message length
 // 4 bytes for messsage cookie
 // last 6 bytes are port and ip (2 bytes = port, 4 bytes = ip)
-func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
+// returns net.UDPAddr pointer
+func parseXORMappedAddress(buffer []byte) (*net.UDPAddr, error) {
 	// plus 2 because of type on message atribute
 	const family_ipv4 byte = 0x01
 	const STUN_ATTR_XOR_MAPPED_ADDRESS uint16 = 0x0020
@@ -98,10 +92,13 @@ func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
 
 	// port is XORed with the top 16 bits of the magic cookie
 	raw_port := binary.BigEndian.Uint16(payload[2:4])
-	port := raw_port ^ uint16(stunMagicCookie>>16)
+	port := int(raw_port ^ uint16(stunMagicCookie>>16)) // convert to int for net.UDPAddr struct
 
 	// ip is XORed with the full magic cookie
+	ip := make(net.IP, 4) // allocate 4 bytes for net.IP
 	raw_ip := binary.BigEndian.Uint32(payload[4:8])
-	ip := raw_ip ^ stunMagicCookie // uint32
-	return PublicEndpoint{Ip: ip, Port: port}, nil
+	xor_ip := raw_ip ^ stunMagicCookie     // uint32
+	binary.BigEndian.PutUint32(ip, xor_ip) // add xored ip to net.IP
+
+	return &net.UDPAddr{IP: ip, Port: port}, nil
 }
