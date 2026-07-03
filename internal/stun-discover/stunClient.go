@@ -40,6 +40,7 @@ func (c Client) buildBindingRequest(transaction_ID [12]byte) []byte {
 	return header
 }
 
+// for now this func returns the response from stun server
 func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 	addr, err := net.ResolveUDPAddr("udp", stunAddr) // udp = ipv4 and ipv6
 	if err != nil {
@@ -70,7 +71,6 @@ func (c Client) SendBindingRequest(stunAddr string) (PublicEndpoint, error) {
 	if err != nil {
 		log.Fatal("Receive error: ", err)
 	}
-	//TODO : TO REMOVE===========================================================================
 	return parseXORMappedAddress(buffer)
 }
 
@@ -103,6 +103,5 @@ func parseXORMappedAddress(buffer []byte) (PublicEndpoint, error) {
 	// ip is XORed with the full magic cookie
 	raw_ip := binary.BigEndian.Uint32(payload[4:8])
 	ip := raw_ip ^ stunMagicCookie // uint32
-	//TODO : TO REMOVE===========================================================================
 	return PublicEndpoint{Ip: ip, Port: port}, nil
 }

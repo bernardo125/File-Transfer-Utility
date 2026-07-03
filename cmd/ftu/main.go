@@ -1,16 +1,13 @@
 package main
 
 import (
-	token "cmd/ftu/main.go/internal/signaling"
+	local "cmd/ftu/main.go/internal/local-discover"
 	"fmt"
 )
 
 func main() {
 
-	key := token.CreateKey()
-	fmt.Printf("KEY: %s\n", key)
-
-	result := token.GetPeer(key)
-	fmt.Printf("RESULT: %x\n", *result)
+	ip := local.GetLocalIP()
+	fmt.Printf("LOCAL: %s\n", ip.To4())
 
 }
