@@ -37,7 +37,7 @@ func CreateKey(conn *net.UDPConn) (key string) {
 	return key
 }
 
-func GetPeer(key string) (peer *connectionCandidates) {
+func GetPeer(key string) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr) {
 	decodedBytes := base64Decoding(key)
 	nonce := decodedBytes[:12] // nonce is 12 bytes
 	cipherText := decodedBytes[12:]
@@ -90,7 +90,7 @@ func base64Enconding(data []byte) (b64token string) {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
-func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (candidates_response *connectionCandidates) {
+func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr) {
 	block, err := aes.NewCipher(secret)
 	if err != nil {
 		panic(err.Error())
@@ -107,8 +107,10 @@ func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (candidates_r
 	}
 
 	endpoint := decodeFrom12bytes(plaintext)
+	peerLocal = endpoint.LocalAddress
+	peerRemote = endpoint.StunPublicAddress
 
-	return endpoint
+	return peerLocal, peerRemote
 }
 
 func decodeFrom12bytes(encodedText []byte) (decodedResponse *connectionCandidates) {

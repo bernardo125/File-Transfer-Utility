@@ -15,6 +15,6 @@ func main() {
 	fmt.Printf("Token: %s\n", public_token)
 
 	// convert key to net.udpAdrr
-	remote := token.GetPeer(public_token)
-	fmt.Printf("OTHER PEER:\nLOCAL IP: %s, PORT: %d\nREMOTE IP: %s, PORT: %d\n", remote.LocalAddress.IP, remote.LocalAddress.Port, remote.StunPublicAddress.IP, remote.StunPublicAddress.Port)
+	local, remote := token.GetPeer(public_token)
+	fmt.Printf("OTHER PEER:\nLOCAL IP: %s, PORT: %d\nREMOTE IP: %s, PORT: %d\n", local.IP, local.Port, remote.IP, remote.Port)
 }
