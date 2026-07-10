@@ -33,3 +33,6 @@ Por isso, é provável quem esteja nesta situação esta utility não vai funcio
 
 ## Encriptação da Key (Token)
 Para garantir segurança e para não haver alterações na chave enviada entre os peers optou-se por encriptar a chave através de AES-GCM. O motivo do uso deste mecanismo é devido á sua alta compatibilidade, garante boa segurança e deteta se houve alterações nos dados (autenticidade). Funciona por encriptação simétrica, o que é essencial para esta aplicação (assim os dois peers podem obter os valores não encriptados). 
+Este token irá conter tanto o endereço ip local, como o endereço ip dado pelo servidor de stun, de modo a garantir que caso a conexão local não seja possível então funciona por stun (este processo ocorre em paralelo e o primeiro a estabelecer a conexão é aquele que será usado). Portanto a key começa a ficar extensa e para manter a simplicidade e não ter um token muito extenso, então este é codificado para um array de 12bytes (address local (6 bytes = ip + port), address stun) pelo que este será encriptado e o seu resultado ainda é codificado para base64. Assim, temos uma key curta (54 caracteres) que terá tudo que é necessário, inclusive segurança, para estabelecer a comunicação
+
+## UDP HOLE PUSH
