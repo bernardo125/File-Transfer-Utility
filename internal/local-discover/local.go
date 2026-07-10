@@ -1,7 +1,6 @@
 package localdiscover
 
 import (
-	"fmt"
 	"log"
 	"net"
 )
@@ -24,6 +23,5 @@ func GetLocalIP() net.IP {
 
 func GetLocalUDPAddr(conn *net.UDPConn) *net.UDPAddr {
 	localAddress := conn.LocalAddr().(*net.UDPAddr)
-	fmt.Printf("LOCAL: %s PORT: %d\n", localAddress.IP, localAddress.Port)
 	return localAddress
 }
