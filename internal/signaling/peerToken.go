@@ -1,14 +1,13 @@
 package encryption
 
 import (
-	"bytes"
 	localdiscover "cmd/ftu/main.go/internal/local-discover"
 	stundiscover "cmd/ftu/main.go/internal/stun-discover"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/gob"
+	"encoding/binary"
 	"encoding/hex"
 	"log"
 	"net"
@@ -65,22 +64,30 @@ func aesgsmEncryct(secret []byte, candidates_response *connectionCandidates) (no
 		panic(err.Error())
 	}
 
-	endpointInBytes := endpointEncode(candidates_response)
+	endpointInBytes := encodeTo12bytes(candidates_response)
 
 	ciphertext = aesgcm.Seal(nil, nonce, endpointInBytes, nil)
 	return nonce, ciphertext
 }
 
-func endpointEncode(candidates_response *connectionCandidates) (encodedEndpoint []byte) {
+func encodeTo12bytes(candidates_response *connectionCandidates) (encodedEndpoint []byte) {
 	// encode connectionCandidates struct to byte buffer
-	var endpointInBytes bytes.Buffer
-	enc := gob.NewEncoder(&endpointInBytes)
+	// build 12byte array with local and stun address to better compression
+	// ip = 4 bytes , port = 2 bytes
+	response := make([]byte, 12)
+	// local address
+	copy(response[0:4], candidates_response.LocalAddress.IP.To4())
+	binary.BigEndian.PutUint16(response[4:6], uint16(candidates_response.LocalAddress.Port))
 
-	err := enc.Encode(candidates_response)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	return endpointInBytes.Bytes()
+	//stun remote
+	copy(response[6:10], candidates_response.StunPublicAddress.IP.To4())
+	binary.BigEndian.PutUint16(response[10:12], uint16(candidates_response.StunPublicAddress.Port))
+	return response
+}
+
+// Base64 codification
+func base64Enconding(data []byte) (b64token string) {
+	return base64.RawURLEncoding.EncodeToString(data)
 }
 
 func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (candidates_response *connectionCandidates) {
@@ -99,28 +106,30 @@ func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (candidates_r
 		panic(err.Error())
 	}
 
-	endpoint := endpointDecode(plaintext)
+	endpoint := decodeFrom12bytes(plaintext)
 
 	return endpoint
 }
 
-func endpointDecode(encodedText []byte) (decodedResponse *connectionCandidates) {
-	// Decode byte buffer to Public Endpoint struct
-	bytesToPeerEndpoint := bytes.NewBuffer(encodedText)
-	decEndpoint := gob.NewDecoder(bytesToPeerEndpoint)
+func decodeFrom12bytes(encodedText []byte) (decodedResponse *connectionCandidates) {
+	// decode byte buffer to connectionCandidates struct
+	// build 12byte array with local and stun address to better compression
+	// ip = 4 bytes , port = 2 bytes
+	// local address
+	localIP := make(net.IP, 4)
+	raw_localIP := binary.BigEndian.Uint32(encodedText[0:4])
+	binary.BigEndian.PutUint32(localIP, raw_localIP)
+	localPort := int(binary.BigEndian.Uint16(encodedText[4:6])) // int to net.UDPAddr struct
+	// stun remote address
+	remoteIP := make(net.IP, 4)
+	raw_remoteIP := binary.BigEndian.Uint32(encodedText[6:10])
+	binary.BigEndian.PutUint32(remoteIP, raw_remoteIP)
+	remotePort := int(binary.BigEndian.Uint16(encodedText[10:12]))
 
-	var response connectionCandidates
-	err := decEndpoint.Decode(&response)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	return &response
-}
-
-// Base64 codification
-func base64Enconding(data []byte) (b64token string) {
-	return base64.RawURLEncoding.EncodeToString(data)
+	localResponse := net.UDPAddr{IP: localIP, Port: localPort}
+	remoteResponse := net.UDPAddr{IP: remoteIP, Port: remotePort}
+	decodedResponse = &connectionCandidates{LocalAddress: &localResponse, StunPublicAddress: &remoteResponse}
+	return decodedResponse
 }
 
 func base64Decoding(b64token string) (decoded []byte) {
