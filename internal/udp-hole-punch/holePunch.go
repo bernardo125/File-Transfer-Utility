@@ -34,7 +34,7 @@ type HolePunchResult struct {
 }
 
 func getDefaultConfig() (config HolePunchConfig) {
-	return HolePunchConfig{Timeout: 10 * time.Second, ProbeInterval: 150 * time.Millisecond,ListenInterval: 500 * time.Millisecond, MaxAttempts: 20}
+	return HolePunchConfig{Timeout: 10 * time.Second, ProbeInterval: 150 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 20}
 }
 
 func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr) <-chan HolePunchResult {
@@ -65,9 +65,9 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr) {
 
 		if err != nil {
 			_ = err // some probes will fail, that's expected
-			time.Sleep(punch.config.ProbeInterval)
 			continue
 		}
+		time.Sleep(punch.config.ProbeInterval)
 		// the address that work will go to channel
 	}
 
@@ -77,24 +77,24 @@ func (punch *HolePuncher) listenPeer() {
 	buffer := make([]byte, 256)
 	for {
 		punch.socket.SetDeadline(time.Now().Add(punch.config.ListenInterval * time.Millisecond))
-		_, addr, err := punch.socket.ReadFromUDP(buffer)
+		n, addr, err := punch.socket.ReadFromUDP(buffer)
 
 		if err != nil {
 			continue
 		}
 
-		msg := string(buffer[:])
+		msg := string(buffer[:n])
 
-		if (msg == punchSYN) {
+		switch msg {
+		case punchSYN:
+			ackMessage := []byte(punchACK)
+			punch.socket.WriteToUDP(ackMessage, addr)
+		case punchACK:
 			// the address that work will go to channel
 			result := HolePunchResult{Addr: addr, Err: nil}
 			punch.resultCh <- result
-		}
-		else if (msg == punchACK){
-			ackMessage := []byte(punchACK)
-			_,err := punch.socket.WriteToUDP(ackMessage,addr)
-		}
-		else{
+			return
+		default:
 			continue
 		}
 
