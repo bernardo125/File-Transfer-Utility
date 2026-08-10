@@ -1,6 +1,7 @@
 package udpholepunch
 
 import (
+	"fmt"
 	"net"
 	"time"
 )
@@ -89,10 +90,12 @@ func (punch *HolePuncher) listenPeer() {
 		case punchSYN:
 			ackMessage := []byte(punchACK)
 			punch.socket.WriteToUDP(ackMessage, addr)
+			fmt.Printf("SYN RECEIVED BY: %s\n", addr.IP)
 		case punchACK:
 			// the address that work will go to channel
 			result := HolePunchResult{Addr: addr, Err: nil}
 			punch.resultCh <- result
+			fmt.Printf("ACK RECEIVED BY: %s\n", addr.IP)
 			return
 		default:
 			continue
