@@ -46,3 +46,5 @@ Considere peer1 e peer2. O que acontece ao nível da NAT:
 
 Após a resposta do peer1 como já está estabelecido então também chega ao peer2 e já é possível a conexão.
 O primeiro pacote UDP funciona cmoo um punch a hole na NAT.
+
+**Em toda a comunicação entre os dois peers é aberto um canal de comunicação (socket), pelo que este será o mesmo para as várias ações da aplicação, desde pedido ao server de stun, udp hole punch e envio de dados**

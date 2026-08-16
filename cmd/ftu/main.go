@@ -24,5 +24,10 @@ func main() {
 	fmt.Printf("OTHER PEER:\nLOCAL IP: %s, PORT: %d\nREMOTE IP: %s, PORT: %d\n", local.IP, local.Port, remote.IP, remote.Port)
 	resultChn := punch.UDPHolePunch(conn, local, remote)
 	result := <-resultChn
-	fmt.Printf("Hole Punching concluído com sucesso para: %s\n", result.Addr.String())
+
+	if result.Err != nil {
+		fmt.Printf("Hole Punching error: %s\n", result.Err)
+	} else {
+		fmt.Printf("Hole Punching sucessfuly conected to: %s\n", result.Addr.String())
+	}
 }
