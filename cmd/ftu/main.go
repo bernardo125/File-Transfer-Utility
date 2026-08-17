@@ -12,7 +12,7 @@ func main() {
 	localIP := local.GetLocalIP()
 	conn := socket.InitializeUDPSocket(localIP)
 	defer conn.Close() // defers the close of connection until the surrounding function returns
-	public_token := token.CreateKey(conn)
+	public_token, myDynamicToken := token.CreateKey(conn)
 	fmt.Printf("Token: %s\n", public_token)
 
 	var other_peer_token string
@@ -20,9 +20,9 @@ func main() {
 	fmt.Scan(&other_peer_token)
 
 	// convert key to net.udpAdrr
-	local, remote := token.GetPeer(other_peer_token)
+	local, remote, expectedToken := token.GetPeer(other_peer_token)
 	fmt.Printf("OTHER PEER:\nLOCAL IP: %s, PORT: %d\nREMOTE IP: %s, PORT: %d\n", local.IP, local.Port, remote.IP, remote.Port)
-	resultChn := punch.UDPHolePunch(conn, local, remote)
+	resultChn := punch.UDPHolePunch(conn, local, remote, myDynamicToken, expectedToken)
 	result := <-resultChn
 
 	if result.Err != nil {

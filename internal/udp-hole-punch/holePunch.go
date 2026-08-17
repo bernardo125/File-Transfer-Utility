@@ -1,6 +1,7 @@
 package udpholepunch
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -8,8 +9,11 @@ import (
 	"time"
 )
 
-var punchSYN = "SYN"
-var punchACK = "ACK"
+const (
+	PunchSYN byte = 0x01
+	PunchACK byte = 0x02
+)
+
 var ErrSameAdress = errors.New("That's your PC token")
 
 // based on https://medium.com/@knightkun/udp-hole-punching-from-scratch-in-golang-building-tsuna-448ca66a733b
@@ -27,6 +31,8 @@ type HolePuncher struct {
 	socket            *net.UDPConn
 	peerLocalAddress  *net.UDPAddr
 	peerRemoteAddress *net.UDPAddr
+	myToken           []byte
+	expectedToken     []byte
 	resultCh          chan HolePunchResult
 }
 
@@ -41,31 +47,35 @@ func getDefaultConfig() (config HolePunchConfig) {
 	return HolePunchConfig{Timeout: 10 * time.Second, ProbeInterval: 200 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 200}
 }
 
-func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr) <-chan HolePunchResult {
+func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, mytoken *[]byte, expectedToken *[]byte) <-chan HolePunchResult {
 	defaultConfig := getDefaultConfig()
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
-		peerLocalAddress: peerLocal, peerRemoteAddress: peerRemote, resultCh: make(chan HolePunchResult)}
+		peerLocalAddress: peerLocal, peerRemoteAddress: peerRemote,
+		expectedToken: *expectedToken, myToken: *mytoken, resultCh: make(chan HolePunchResult)}
 	//goroutine - try to punch and listen for udp packets (async)
-	go punch.tryPunch()
+	go punch.tryPunch(mytoken)
 	//when resultCh channel receive data or timeout this func will return the result to main app
-	go punch.listenPeer()
+	go punch.listenPeer(mytoken, expectedToken)
 
 	return punch.resultCh
 }
 
 // First-to-Respond principle: local network is faster than stun
-func (punch *HolePuncher) tryPunch() {
+func (punch *HolePuncher) tryPunch(mytoken *[]byte) {
 	// TODO : dynamic 4 byte key to avoid spoofing
 	// simple message SYN - ACK for hole punch
 	// 1 peer send SYN, 2 peer reply with ACK
 	// this routine separates on 2 routines that will try to probe locally and stun
-	go punch.probe(punch.peerLocalAddress)
-	go punch.probe(punch.peerRemoteAddress)
+	go punch.probe(punch.peerLocalAddress, mytoken)
+	go punch.probe(punch.peerRemoteAddress, mytoken)
 
 }
 
-func (punch *HolePuncher) probe(addr *net.UDPAddr) {
-	probeMessage := []byte(punchSYN)
+func (punch *HolePuncher) probe(addr *net.UDPAddr, mytoken *[]byte) {
+	// binary protocol : 1 byte (SYN or ACK), 4 bytes (token)
+	probeMessage := make([]byte, 5)
+	probeMessage[0] = PunchSYN
+	copy(probeMessage[1:5], *mytoken)
 	for i := 0; i < punch.config.MaxAttempts; i++ {
 
 		_, err := punch.socket.WriteToUDP(probeMessage, addr)
@@ -80,7 +90,7 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr) {
 
 }
 
-func (punch *HolePuncher) listenPeer() {
+func (punch *HolePuncher) listenPeer(myToken *[]byte, expectedToken *[]byte) {
 	buffer := make([]byte, 256)
 	for {
 		punch.socket.SetReadDeadline(time.Now().Add(punch.config.ListenInterval * time.Millisecond))
@@ -93,7 +103,7 @@ func (punch *HolePuncher) listenPeer() {
 		}
 
 		// test if is the same address
-		if isMyAddress(punch, addr) {
+		if isMyOwnPC(myToken, expectedToken) {
 			punch.resultCh <- HolePunchResult{Addr: nil, Err: ErrSameAdress}
 			return
 		}
@@ -103,14 +113,17 @@ func (punch *HolePuncher) listenPeer() {
 			continue
 		}
 
-		msg := string(buffer[:n])
+		msg := buffer[:n]
+		isExpectedToken := bytes.Equal(msg[1:5], *expectedToken)
 
-		switch msg {
-		case punchSYN:
+		if msg[0] == PunchSYN && isExpectedToken {
 			fmt.Printf("SYN RECEIVED BY: %s\n", addr.IP)
-			ackMessage := []byte(punchACK)
+			ackMessage := make([]byte, 5)
+			ackMessage[0] = PunchACK
+			copy(ackMessage[1:5], *myToken)
 			punch.socket.WriteToUDP(ackMessage, addr)
-		case punchACK:
+
+		} else if msg[0] == PunchACK && isExpectedToken {
 			// the address that work will go to channel
 			fmt.Printf("ACK RECEIVED BY: %s\n", addr.IP)
 			punch.resultCh <- HolePunchResult{Addr: addr, Err: nil}
@@ -120,15 +133,7 @@ func (punch *HolePuncher) listenPeer() {
 	}
 }
 
-func isMyAddress(punch *HolePuncher, addr *net.UDPAddr) bool {
-	// verify if the target address is the same as pc address
-	//local
-	if addr.IP.Equal(punch.peerLocalAddress.IP) && addr.Port == punch.peerLocalAddress.Port {
-		return true
-	}
-	//remote
-	if addr.IP.Equal(punch.peerRemoteAddress.IP) && addr.Port == punch.peerRemoteAddress.Port {
-		return true
-	}
-	return false
+func isMyOwnPC(myToken *[]byte, expectedToken *[]byte) bool {
+	// verify if the target token is the same as pc token
+	return bytes.Equal(*myToken, *expectedToken)
 }
