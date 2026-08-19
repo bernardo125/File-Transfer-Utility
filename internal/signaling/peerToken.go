@@ -3,14 +3,14 @@ package encryption
 import (
 	localdiscover "cmd/ftu/main.go/internal/local-discover"
 	stundiscover "cmd/ftu/main.go/internal/stun-discover"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"log"
 	"net"
+
+	"golang.org/x/crypto/chacha20"
 )
 
 var DefaultSTUNServers = []string{
@@ -33,7 +33,7 @@ func CreateKey(conn *net.UDPConn) (key string, myDynamicToken *[]byte) {
 	stun_response, _ := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
 	randToken := dynamicTokenGen()
 	connCandidates := connectionCandidates{LocalAddress: local_response, StunPublicAddress: stun_response, RandToken: randToken}
-	nonce, ciphertext := aesgsmEncryct(secret, &connCandidates)
+	nonce, ciphertext := chacha20Encryct(secret, &connCandidates)
 	finalPacket := append(nonce, ciphertext...)
 	key = base64Enconding(finalPacket)
 	return key, &randToken
@@ -53,32 +53,28 @@ func GetPeer(key string) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, randT
 	decodedBytes := base64Decoding(key)
 	nonce := decodedBytes[:12] // nonce is 12 bytes
 	cipherText := decodedBytes[12:]
-	return aesgsmDecryct(secret, nonce, cipherText)
+	return chacha20Decryct(secret, nonce, cipherText)
 }
 
-// ENCRYPTATION BASED ON AES-GCM
-// based on https://pkg.go.dev/crypto/cipher#NewGCM  examples
-func aesgsmEncryct(secret []byte, candidates_response *connectionCandidates) (nonce []byte, ciphertext []byte) {
-	block, err := aes.NewCipher(secret)
+// ENCRYPTATION BASED ON Chacha20
+// based on https://mojoauth.com/encryption-decryption/chacha20-256-encryption--go#encrypting-data-with-chacha20-256-in-goM
+func chacha20Encryct(secret []byte, candidates_response *connectionCandidates) (nonce []byte, ciphertext []byte) {
+	// Generate a nonce
+	nonce = make([]byte, chacha20.NonceSize)
+	_, err := rand.Read(nonce)
 	if err != nil {
-		log.Fatal(err.Error())
+		panic(err)
 	}
-	//create aescgm encryct
-	aesgcm, err := cipher.NewGCM(block)
+	// Create a ChaCha20 cipher
+	cipher, err := chacha20.NewUnauthenticatedCipher(secret, nonce)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
-	// nonce (number used ince) is a random number used only 1 time to AES (IV — Initialization Vector)
-	// Never use more than 2^32 random nonces with a given key because of the risk of a repeat
-	nonce = make([]byte, aesgcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		panic(err.Error())
-	}
-
-	endpointInBytes := encodeTo16bytes(candidates_response)
-
-	ciphertext = aesgcm.Seal(nil, nonce, endpointInBytes, nil)
+	plaintext := encodeTo16bytes(candidates_response)
+	ciphertext = make([]byte, len(plaintext))
+	// Encrypt the plaintext
+	cipher.XORKeyStream(ciphertext, plaintext)
 	return nonce, ciphertext
 }
 
@@ -106,21 +102,15 @@ func base64Enconding(data []byte) (b64token string) {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
-func aesgsmDecryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, randToken *[]byte) {
-	block, err := aes.NewCipher(secret)
+func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, randToken *[]byte) {
+	cipher, err := chacha20.NewUnauthenticatedCipher(secret, nonce)
 	if err != nil {
-		panic(err.Error())
+		panic(err)
 	}
 
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		panic(err.Error())
-	}
+	plaintext := make([]byte, len(ciphertext))
+	// Decrypt the ciphertext
+	cipher.XORKeyStream(plaintext, ciphertext)
 
 	endpoint := decodeFrom16bytes(plaintext)
 	peerLocal = endpoint.LocalAddress
