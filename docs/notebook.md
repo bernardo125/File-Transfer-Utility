@@ -10,9 +10,16 @@ A solução para isso é através do protocolo STUN (session travessal utilities
 **O objetivo desta utility é nunca depender de qualquer tipo de servidor externo (para além do stun que já há gratuitos públicos), daí o servidor de signaling (intermediador incial enquanto a comunicação entre os peers nao é estabelecida) normalmente usado neste tipo de arquiteturas vai ser omitido.**
 
 ## A SOLUCAO: KEY TROCADA ENTRE PEERS
-Na verdade este será encriptado (por exemplo por AES-GCM), juntamente com outras informações como palavra passe da sessao, e vai passar por uma função de hash na base64 para obter uma key simples.
+Na verdade este será ofuscado (por exemplo por um XOR simples, de modo que um scraper que aceda ao canal de comunicação e descodifique a informação não consiga saber informação como o ip publico do peer, partindo do principio que este scrapper não sabe a app que estou a usar e apenas vê o token no canal de comunicação externo), juntamente com outras informações como palavra passe da sessao, e vai passar por uma função de hash na base64 para obter uma key simples. (cerca de 50 caractes)
 
 Esta key (token) é fundamental para a comunicação. Cada peer deverá enviar esta key ao outro peer, por um outro qualquer tipo de meio de comunicação seguro (tipo whatsapp, discord - neste caso vai ser tipo um server de "signaling" manual) e esta key permitirá os peer poderem se encontrar. Isto irá permitir reduzir infraestrutura (basta os peers e o server de STUN), através de um código simples tal como uma chave de um lobby de uma sala de um jogo online.
+
+Esta key terá informação como o ip + port local e ip + port publico da internet, bem como a hash do certificado TLS autoassinado e 1 byte para identificar a role de cada peer (enviar ou receber dados)
+
+ip + port local (6 bytes)
+ip + port public (6 bytes)
+TLS-PSK / Token de Hole Punch (16 bytes)
+TLS-PSK / Token de Hole Punch (16 bytes)
 
 ## Protocolo STUN 
 
