@@ -3,6 +3,7 @@ package main
 import (
 	local "cmd/ftu/main.go/internal/local-discover"
 	socket "cmd/ftu/main.go/internal/network"
+	comunication "cmd/ftu/main.go/internal/quic"
 	token "cmd/ftu/main.go/internal/signaling"
 	punch "cmd/ftu/main.go/internal/udp-hole-punch"
 	"fmt"
@@ -27,7 +28,12 @@ func main() {
 
 	if result.Err != nil {
 		fmt.Printf("Hole Punching error: %s\n", result.Err)
+		return
 	} else {
 		fmt.Printf("Hole Punching sucessfuly conected to: %s\n", result.Addr.String())
 	}
+
+	comunication.QuicUpgrade(conn, result.Addr, myDynamicToken, expectedToken)
+	fmt.Print("TEST: ")
+	fmt.Scan(&other_peer_token)
 }

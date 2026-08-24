@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	PunchSYN byte = 0x01
-	PunchACK byte = 0x02
+	PUNCH byte = 0x01
 )
 
 var ErrSameAdress = errors.New("That's your PC token")
@@ -44,7 +43,7 @@ type HolePunchResult struct {
 }
 
 func getDefaultConfig() (config HolePunchConfig) {
-	return HolePunchConfig{Timeout: 10 * time.Second, ProbeInterval: 200 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 200}
+	return HolePunchConfig{Timeout: 60 * time.Second, ProbeInterval: 200 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 10}
 }
 
 func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, mytoken *[]byte, expectedToken *[]byte) <-chan HolePunchResult {
@@ -62,9 +61,7 @@ func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDP
 
 // First-to-Respond principle: local network is faster than stun
 func (punch *HolePuncher) tryPunch(mytoken *[]byte) {
-	// TODO : dynamic 4 byte key to avoid spoofing
-	// simple message SYN - ACK for hole punch
-	// 1 peer send SYN, 2 peer reply with ACK
+	// simple message PUNCH to enable NAT mapping
 	// this routine separates on 2 routines that will try to probe locally and stun
 	go punch.probe(punch.peerLocalAddress, mytoken)
 	go punch.probe(punch.peerRemoteAddress, mytoken)
@@ -72,9 +69,9 @@ func (punch *HolePuncher) tryPunch(mytoken *[]byte) {
 }
 
 func (punch *HolePuncher) probe(addr *net.UDPAddr, mytoken *[]byte) {
-	// binary protocol : 1 byte (SYN or ACK), 4 bytes (token)
+	// binary protocol : 1 byte (PUNCH), 4 bytes (token)
 	probeMessage := make([]byte, 5)
-	probeMessage[0] = PunchSYN
+	probeMessage[0] = PUNCH
 	copy(probeMessage[1:5], *mytoken)
 	for i := 0; i < punch.config.MaxAttempts; i++ {
 
@@ -93,7 +90,7 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr, mytoken *[]byte) {
 func (punch *HolePuncher) listenPeer(myToken *[]byte, expectedToken *[]byte) {
 	buffer := make([]byte, 256)
 	for {
-		punch.socket.SetReadDeadline(time.Now().Add(punch.config.ListenInterval * time.Millisecond))
+		punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
 		n, addr, err := punch.socket.ReadFromUDP(buffer)
 
 		// if error type is timeout, a null address will be returned to the channel
@@ -108,29 +105,22 @@ func (punch *HolePuncher) listenPeer(myToken *[]byte, expectedToken *[]byte) {
 			return
 		}
 
+		msg := buffer[:n]
+
 		//otherwise continue looping
-		if err != nil {
+		if n < 5 || msg[0] != PUNCH {
 			continue
 		}
-
-		msg := buffer[:n]
 		isExpectedToken := bytes.Equal(msg[1:5], *expectedToken)
 
-		if msg[0] == PunchSYN && isExpectedToken {
-			fmt.Printf("SYN RECEIVED BY: %s\n", addr.IP)
-			ackMessage := make([]byte, 5)
-			ackMessage[0] = PunchACK
-			copy(ackMessage[1:5], *myToken)
-			punch.socket.WriteToUDP(ackMessage, addr)
-
-		} else if msg[0] == PunchACK && isExpectedToken {
-			// the address that work will go to channel
-			fmt.Printf("ACK RECEIVED BY: %s\n", addr.IP)
+		if isExpectedToken {
+			fmt.Printf("PUNCH RECEIVED BY: %s\n", addr.IP)
 			punch.resultCh <- HolePunchResult{Addr: addr, Err: nil}
 			return
-		}
 
+		}
 	}
+
 }
 
 func isMyOwnPC(myToken *[]byte, expectedToken *[]byte) bool {
