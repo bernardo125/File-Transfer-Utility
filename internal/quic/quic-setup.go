@@ -17,11 +17,7 @@ import (
 )
 
 // Based on https://github.com/quic-go/quic-go/blob/master/example/echo/echo.go
-func generateTLSConfig() *tls.Config {
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		panic(err)
-	}
+func generateTLSConfig(priv ed25519.PrivateKey) *tls.Config {
 	template := x509.Certificate{SerialNumber: big.NewInt(1)}
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, priv.Public(), priv)
 	if err != nil {
@@ -44,12 +40,13 @@ func QuicUpgrade(mySocket *net.UDPConn, destination *net.UDPAddr, mytoken *[]byt
 	if bytes.Compare(*mytoken, *expectedToken) == 1 {
 		return nil, nil
 	} else {
-		return quicDoDial(mySocket, destination)
+		//return quicDoDial(mySocket, destination)
+		return nil, nil
 	}
 
 }
 
-func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr) (*quic.Conn, error) {
+func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv ed25519.PrivateKey) (*quic.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -60,7 +57,7 @@ func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr) (*quic.Conn, er
 	}
 
 	// start tls self certificate to secure data transfer
-	quicConn, err := quic.Dial(ctx, mySocket, destination, generateTLSConfig(), quicConfig)
+	quicConn, err := quic.Dial(ctx, mySocket, destination, generateTLSConfig(priv), quicConfig)
 	if err != nil {
 		log.Printf("Failed to connect to %s: %v", destination, err)
 		return nil, fmt.Errorf("failed to connect to any candidate")

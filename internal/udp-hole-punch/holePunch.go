@@ -2,6 +2,7 @@ package udpholepunch
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"net"
@@ -26,13 +27,13 @@ type HolePunchConfig struct {
 
 // hole puncher struct contains all required information to perform udp hole punch. May be updated to include TCP hole punch (not necessary for this project)
 type HolePuncher struct {
-	config            HolePunchConfig
-	socket            *net.UDPConn
-	peerLocalAddress  *net.UDPAddr
-	peerRemoteAddress *net.UDPAddr
-	myToken           []byte
-	expectedToken     []byte
-	resultCh          chan HolePunchResult
+	config             HolePunchConfig
+	socket             *net.UDPConn
+	peerLocalAddress   *net.UDPAddr
+	peerRemoteAddress  *net.UDPAddr
+	myPublicKey        []byte
+	otherPeerPublicKey []byte
+	resultCh           chan HolePunchResult
 }
 
 // struct that will be returned to start send chunks
@@ -46,33 +47,34 @@ func getDefaultConfig() (config HolePunchConfig) {
 	return HolePunchConfig{Timeout: 60 * time.Second, ProbeInterval: 200 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 10}
 }
 
-func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, mytoken *[]byte, expectedToken *[]byte) <-chan HolePunchResult {
+func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
 	defaultConfig := getDefaultConfig()
+	publicKey := privateKey.Public().(ed25519.PublicKey)
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
 		peerLocalAddress: peerLocal, peerRemoteAddress: peerRemote,
-		expectedToken: *expectedToken, myToken: *mytoken, resultCh: make(chan HolePunchResult)}
+		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult)}
 	//goroutine - try to punch and listen for udp packets (async)
-	go punch.tryPunch(mytoken)
+	go punch.tryPunch()
 	//when resultCh channel receive data or timeout this func will return the result to main app
-	go punch.listenPeer(mytoken, expectedToken)
+	go punch.listenPeer()
 
 	return punch.resultCh
 }
 
 // First-to-Respond principle: local network is faster than stun
-func (punch *HolePuncher) tryPunch(mytoken *[]byte) {
+func (punch *HolePuncher) tryPunch() {
 	// simple message PUNCH to enable NAT mapping
 	// this routine separates on 2 routines that will try to probe locally and stun
-	go punch.probe(punch.peerLocalAddress, mytoken)
-	go punch.probe(punch.peerRemoteAddress, mytoken)
+	go punch.probe(punch.peerLocalAddress, punch.myPublicKey)
+	go punch.probe(punch.peerRemoteAddress, punch.myPublicKey)
 
 }
 
-func (punch *HolePuncher) probe(addr *net.UDPAddr, mytoken *[]byte) {
-	// binary protocol : 1 byte (PUNCH), 4 bytes (token)
-	probeMessage := make([]byte, 5)
+func (punch *HolePuncher) probe(addr *net.UDPAddr, myPublicKey []byte) {
+	// binary protocol : 1 byte (PUNCH), 32 bytes (public key)
+	probeMessage := make([]byte, 33)
 	probeMessage[0] = PUNCH
-	copy(probeMessage[1:5], *mytoken)
+	copy(probeMessage[1:33], myPublicKey)
 	for i := 0; i < punch.config.MaxAttempts; i++ {
 
 		_, err := punch.socket.WriteToUDP(probeMessage, addr)
@@ -87,7 +89,7 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr, mytoken *[]byte) {
 
 }
 
-func (punch *HolePuncher) listenPeer(myToken *[]byte, expectedToken *[]byte) {
+func (punch *HolePuncher) listenPeer() {
 	buffer := make([]byte, 256)
 	for {
 		punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
@@ -100,7 +102,7 @@ func (punch *HolePuncher) listenPeer(myToken *[]byte, expectedToken *[]byte) {
 		}
 
 		// test if is the same address
-		if isMyOwnPC(myToken, expectedToken) {
+		if isMyOwnPC(&punch.myPublicKey, &punch.otherPeerPublicKey) {
 			punch.resultCh <- HolePunchResult{Addr: nil, Err: ErrSameAdress}
 			return
 		}
@@ -111,7 +113,7 @@ func (punch *HolePuncher) listenPeer(myToken *[]byte, expectedToken *[]byte) {
 		if n < 5 || msg[0] != PUNCH {
 			continue
 		}
-		isExpectedToken := bytes.Equal(msg[1:5], *expectedToken)
+		isExpectedToken := bytes.Equal(msg[1:33], punch.otherPeerPublicKey)
 
 		if isExpectedToken {
 			fmt.Printf("PUNCH RECEIVED BY: %s\n", addr.IP)
