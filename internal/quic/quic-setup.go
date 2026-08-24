@@ -17,7 +17,7 @@ import (
 )
 
 // Based on https://github.com/quic-go/quic-go/blob/master/example/echo/echo.go
-func generateTLSConfig(priv ed25519.PrivateKey) *tls.Config {
+func generateTLSConfig(priv *ed25519.PrivateKey) *tls.Config {
 	template := x509.Certificate{SerialNumber: big.NewInt(1)}
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, priv.Public(), priv)
 	if err != nil {
@@ -29,24 +29,26 @@ func generateTLSConfig(priv ed25519.PrivateKey) *tls.Config {
 			Certificate: [][]byte{certDER},
 			PrivateKey:  priv,
 		}},
-		NextProtos: []string{"quic-echo-example"},
+		NextProtos:         []string{"quic-echo-example"},
+		InsecureSkipVerify: true,
 	}
 }
 
 // udp upgrade to quic comunication to send data
-func QuicUpgrade(mySocket *net.UDPConn, destination *net.UDPAddr, mytoken *[]byte, expectedToken *[]byte) (*quic.Conn, error) {
+func QuicUpgrade(mySocket *net.UDPConn, destination *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
 
 	// decide who will be the listenner or dialer on handshake
-	if bytes.Compare(*mytoken, *expectedToken) == 1 {
-		return nil, nil
+	// if my public key is higher than other peer i will be listener, else dialer
+	myPublicKey := privateKey.Public().(ed25519.PublicKey)
+	if bytes.Compare(myPublicKey, *otherPeerPublicKey) > 0 {
+		return quicDoListen(mySocket, privateKey)
 	} else {
-		//return quicDoDial(mySocket, destination)
-		return nil, nil
+		return quicDoDial(mySocket, destination, privateKey)
 	}
 
 }
 
-func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv ed25519.PrivateKey) (*quic.Conn, error) {
+func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.PrivateKey) (*quic.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -68,18 +70,17 @@ func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv ed25519.Pr
 
 }
 
-/*
-func quicDoListen(mySocket *net.UDPConn, destination *net.UDPAddr) (*quic.Conn, error) {
-	listener, err := quic.ListenAddr(destination, generateTLSConfig(), nil)
+func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey) (*quic.Conn, error) {
+	listener, err := quic.Listen(mySocket, generateTLSConfig(priv), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer listener.Close()
 
 	conn, err := listener.Accept(context.Background())
 	if err != nil {
-		return err
+		return nil, err
 	}
-
+	log.Printf("Successfully connected to %s", conn.RemoteAddr())
+	return conn, nil
 }
-*/
