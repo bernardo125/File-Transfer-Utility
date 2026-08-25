@@ -54,3 +54,35 @@ Após a resposta do peer1 como já está estabelecido então também chega ao pe
 O primeiro pacote UDP funciona cmoo um punch a hole na NAT.
 
 **Em toda a comunicação entre os dois peers é aberto um canal de comunicação (socket), pelo que este será o mesmo para as várias ações da aplicação, desde pedido ao server de stun, udp hole punch e envio de dados**
+
+## Interface concept
+Quero uma interação de humano computador facil de entender. A ideia é ter um menu inicial onde o utilizador escolhe se pretende enviar ou receber um ficheiro,   depois tem o token que vai partilhar para o outro peer. Após a ligação quic ambos entram numa sessão e a minha ideia é aparecer no terminal como dois computadores ligados. Quando quem vai enviar escolhe o ficheiro e e quem     recebe confirma que quer receber aquele ficheiro (com metadados) então a ligação entre os computadores começa a enviar com uma animação de atirar um aviao de um pc para o outro e em baixo uma barra de progresso e velocidade    de transferencia. Após o envio, os peers podem decidir se pretendem continuar a enviar ficheiros ou terminar a comunicação e voltar ao menu inicial (enviar receber). O menu incial também terá um botao para terminar o programa.
+
+
+**Arquitetura da TUI**
+
+type sessionState int
+const (
+    stateMenu sessionState = iota
+    stateTokenInput
+    stateHolePunching
+    stateConnected
+    stateTransferring
+    stateFinished
+)
+
+No método Update(msg tea.Msg) (tea.Model, tea.Cmd):
+
+1. No stateMenu: 
+    * O utilizador seleciona com as setas: [1] Enviar Ficheiro ou [2] Receber Ficheiro.
+2. No stateTokenInput: 
+    * Se for Enviar, você gera o token local usando token.CreateKey(conn) e exibe-o na tela para cópia.
+    * Se for Receber, exibe um textinput do Bubbles para colar o token do outro peer.
+3. No stateHolePunching: 
+    * Você dispara a sua função UDPHolePunch como um tea.Cmd. Quando o canal de resultado receber o endereço, você retorna uma mensagem holePunchSuccessMsg ou holePunchFailedMsg para atualizar a tela.
+4. No stateConnected: Você renderiza os dois computadores desenhados em ASCII Art e conectados por uma linha contínua.
+    * O emissor abre o filepicker do Bubbles para selecionar o ficheiro. Ao selecionar, envia os metadados (nome do ficheiro, tamanho) via QUIC.
+    * O receptor vê na tela: "Peer quer enviar 'video.mp4' (1.2 GB). Aceitar? (S/N)".
+5. No stateTransferring: 
+    * Dispara-se a transferência QUIC em background. O escritor/leitor do QUIC atualiza um contador de bytes transmitidos.
+    * Uma rotina em segundo plano calcula a velocidade (bytes por segundo) e despacha atualizações periódicas de progresso para a UI.* A tela exibe a animação do avião de papel cruzando de uma caixa para a outra, com a barra de progresso (bubbles/progress) e a velocidade correndo abaixo.
