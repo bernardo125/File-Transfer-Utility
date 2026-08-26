@@ -16,7 +16,7 @@ Aplicação de linha de comandos para transferência de ficheiros peer-to-peer (
 | Fase | Componente | Tarefas Principais |
 | --- | --- | --- |
 | **1** | **Fundações UDP e STUN** | - Inicializar `net.ListenUDP` numa porta local fixa.- Implementar cliente STUN para extrair IP:Porta do router. - Validar comportamento em redes locais vs. redes externas. |
-| **2** | **Criptografia e Chaves** | - Implementar AES-GCM (256-bit) com chave simétrica partilhada/PIN.- Comprimir e codificar o IP:Porta resultante em Base64.- Implementar função reversa (descodificar e desencriptar). |
+| **2** | **Criptografia e Chaves** | - Implementar XOR com chave simétrica partilhada/PIN para obsfucação do token.- Comprimir e codificar o IP:Porta resultante em Base64.- Implementar função reversa (descodificar e desencriptar). |
 | **3** | **UDP Hole Punching** | - Desenvolver ciclo de sincronização para envio de pacotes simultâneos.- Forçar a abertura da porta no NAT enviando tráfego cego para o destino. |
 | **4** | **Ligação QUIC** | - Injetar o socket UDP perfurado na configuração do `quic-go`.- Estabelecer *handshake* e multiplexação de canais bidirecionais. |
 | **5** | **Motor de Transferência** | - Implementar leitura e escrita em disco por blocos (gestão de RAM).- Calcular taxa de transferência em tempo real (MB/s). |
