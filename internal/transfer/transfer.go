@@ -2,12 +2,17 @@ package transfer
 
 import (
 	"encoding/binary"
+	"fmt"
+	"io"
+	"log"
 	"os"
+	"time"
 
 	"github.com/quic-go/quic-go"
 )
 
 const FILE_META_PAYLOAD_MIN_LENGTH = 10
+const TRANSPORT_ERROR = 0x3
 
 func selectFileToSend(fileName string, conn *quic.Conn) (*os.File, os.FileInfo, error) {
 	file, openErr := os.Open(fileName)
@@ -46,10 +51,38 @@ func buildMetaDataPayload(fileStats os.FileInfo) []byte {
 	return payload
 }
 
-func sendFile(fileName string, conn *quic.Conn, commStream quic.Stream) error /*{
+// Function to send file to other peer (initialization of stream on quic module)
+func sendFile(fileName string, conn *quic.Conn, commStream *quic.Stream) error {
+	// file selection
 	file, fileStats, err := selectFileToSend(fileName, conn)
 	if err != nil {
 		return err
 	}
+	// metadata of file
+	metaPayload := buildMetaDataPayload(fileStats)
 
-}*/
+	defer commStream.Close()
+
+	// send file metadata
+	_, writeMetaErr := commStream.Write(metaPayload)
+	if writeMetaErr != nil {
+		conn.CloseWithError(TRANSPORT_ERROR, writeMetaErr.Error())
+		return writeMetaErr
+	}
+
+	// read if the reception of file has been accepted by other peer
+	recvBuff := make([]byte, 10)
+	_, err = commStream.Read(recvBuff)
+	if err != nil {
+		return err
+	}
+	log.Println("Sending data to other peer")
+	start := time.Now()
+	_, err = io.Copy(commStream, file)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Finished transfer in %.2f seconds!", time.Since(start).Seconds())
+	return nil
+
+}
