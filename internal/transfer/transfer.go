@@ -51,6 +51,15 @@ func buildMetaDataPayload(fileStats os.FileInfo) []byte {
 	return payload
 }
 
+/*
+func receiveMetaDataPayload(payloadBytes []byte) (fileStats os.FileInfo) {
+	fileSize := int64(payloadBytes[0:8])
+	filenameLen := int16(payloadBytes[8:10])
+	filename := string(payloadBytes[10:filenameLen])
+
+}
+*/
+
 // Function to send file to other peer (initialization of stream on quic module)
 func sendFile(fileName string, conn *quic.Conn, commStream *quic.Stream) error {
 	// file selection
@@ -86,3 +95,23 @@ func sendFile(fileName string, conn *quic.Conn, commStream *quic.Stream) error {
 	return nil
 
 }
+
+/*
+// recieves a file from whoever establishes a quic connection with the other peer
+func receiveFile(addr string, conn *quic.Conn, commStream *quic.Stream) error {
+	newFile, err := os.Create(saveLocation + "/" + friend.FileName)
+	if err != nil {
+		log.Println("Error: " + err.Error())
+		notifyFrontEnd(err.Error() + "")
+		return err
+	}
+	defer newFile.Close()
+
+	log.Println("Recieving file!")
+	start := time.Now()
+
+	io.Copy(newFile, commStream)
+
+	fmt.Printf("Finished transfer in %.2f seconds!", time.Since(start).Seconds())
+	return nil
+}*/
