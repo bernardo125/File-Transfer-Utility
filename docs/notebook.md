@@ -55,6 +55,89 @@ O primeiro pacote UDP funciona cmoo um punch a hole na NAT.
 
 **Em toda a comunicação entre os dois peers é aberto um canal de comunicação (socket), pelo que este será o mesmo para as várias ações da aplicação, desde pedido ao server de stun, udp hole punch e envio de dados**
 
+## Protocolo de envio de dados entre os peers
+The protocol follows an HTTP-inspired request/response model, adapted for peer-to-peer file transfer over QUIC. Binary messages are used for transfer requests, responses, and metadata, while the file content is transmitted directly as the body of the QUIC stream.
+ARCH:
+Sender
+                         ┌───────────────┐
+                         │      IDLE     │
+                         └───────┬───────┘
+                                 │
+                              REQUEST
+                                 │
+                                 ▼
+                         ┌───────────────┐
+                         │   REQUESTED   │
+                         └───────┬───────┘
+                                 │
+                         RESPONSE received
+                                 │
+                    ┌────────────┴────────────┐
+                    │                         │
+              ACCEPTED / 2xx              REJECTED
+                    │                         │
+                    ▼                         ▼
+             ┌─────────────┐             ┌──────────┐
+             │  TRANSFERRING│             │ REJECTED │
+             └──────┬──────┘             └──────────┘
+                    │
+              Stream FIN
+                    │
+                    ▼
+             ┌─────────────┐
+             │  VERIFYING  │
+             └──────┬──────┘
+                    │
+              checksum valid
+                    │
+                    ▼
+             ┌─────────────┐
+             │  COMPLETED  │
+             └─────────────┘
+
+
+Receiver:
+RECEIVE_REQUEST
+      │
+      ├── REJECT
+      │
+      └── ACCEPT
+            │
+            ▼
+      RECEIVE_BODY
+            │
+            ▼
+      VERIFY_CHECKSUM
+            │
+       ┌────┴────┐
+       │         │
+      OK       ERROR
+       │         │
+       ▼         ▼
+   COMPLETE    FAILED
+
+
+TEU PROTOCOLO
+─────────────────────────────
+O que quero transferir?
+Aceitas?
+Qual é o ficheiro?
+Quanto mede?
+Qual é o hash?
+Terminou?
+Cancela.
+─────────────────────────────
+              ↓
+QUIC
+─────────────────────────────
+Como transportar os bytes?
+Como recuperar perdas?
+Como controlar congestionamento?
+Como multiplexar streams?
+─────────────────────────────
+              ↓
+UDP
+
 ## Interface concept
 Quero uma interação de humano computador facil de entender. A ideia é ter um menu inicial onde o utilizador escolhe se pretende enviar ou receber um ficheiro,   depois tem o token que vai partilhar para o outro peer. Após a ligação quic ambos entram numa sessão e a minha ideia é aparecer no terminal como dois computadores ligados. Quando quem vai enviar escolhe o ficheiro e e quem     recebe confirma que quer receber aquele ficheiro (com metadados) então a ligação entre os computadores começa a enviar com uma animação de atirar um aviao de um pc para o outro e em baixo uma barra de progresso e velocidade    de transferencia. Após o envio, os peers podem decidir se pretendem continuar a enviar ficheiros ou terminar a comunicação e voltar ao menu inicial (enviar receber). O menu incial também terá um botao para terminar o programa.
 
