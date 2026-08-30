@@ -1,19 +1,17 @@
 package main
 
 import (
-	local "cmd/ftu/main.go/internal/local-discover"
-	socket "cmd/ftu/main.go/internal/network"
-	comunication "cmd/ftu/main.go/internal/quic"
-	token "cmd/ftu/main.go/internal/signaling"
-	punch "cmd/ftu/main.go/internal/udp-hole-punch"
+	connectivity "cmd/ftu/main.go/internal/connectivity"
+	discovery "cmd/ftu/main.go/internal/discovery"
+	transport "cmd/ftu/main.go/internal/transport"
 	"fmt"
 )
 
 func main() {
-	localIP := local.GetLocalIP()
-	conn := socket.InitializeUDPSocket(localIP)
+	localIP := discovery.GetLocalIP()
+	conn := transport.InitializeUDPSocket(localIP)
 	defer conn.Close() // defers the close of connection until the surrounding function returns
-	publicToken, privateKey := token.CreateKey(conn)
+	publicToken, privateKey := discovery.CreateKey(conn)
 	fmt.Printf("Token: %s\n", publicToken)
 
 	var other_peer_token string
@@ -21,9 +19,9 @@ func main() {
 	fmt.Scan(&other_peer_token)
 
 	// convert key to net.udpAdrr
-	local, remote, otherPeerPublicKey := token.GetPeer(other_peer_token)
+	local, remote, otherPeerPublicKey := discovery.GetPeer(other_peer_token)
 	fmt.Printf("OTHER PEER:\nLOCAL IP: %s, PORT: %d\nREMOTE IP: %s, PORT: %d\n", local.IP, local.Port, remote.IP, remote.Port)
-	resultChn := punch.UDPHolePunch(conn, local, remote, &privateKey, otherPeerPublicKey)
+	resultChn := connectivity.UDPHolePunch(conn, local, remote, &privateKey, otherPeerPublicKey)
 	result := <-resultChn
 
 	if result.Err != nil {
@@ -33,7 +31,7 @@ func main() {
 		fmt.Printf("Hole Punching sucessfuly conected to: %s\n", result.Addr.String())
 	}
 
-	comunication.QuicUpgrade(conn, result.Addr, &privateKey, otherPeerPublicKey)
+	transport.QuicUpgrade(conn, result.Addr, &privateKey, otherPeerPublicKey)
 	fmt.Print("TEST: ")
 	fmt.Scan(&other_peer_token)
 }

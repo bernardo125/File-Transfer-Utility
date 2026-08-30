@@ -79,12 +79,6 @@ func sendFile(fileName string, conn *quic.Conn, commStream *quic.Stream) error {
 		return writeMetaErr
 	}
 
-	// read if the reception of file has been accepted by other peer
-	recvBuff := make([]byte, 10)
-	_, err = commStream.Read(recvBuff)
-	if err != nil {
-		return err
-	}
 	log.Println("Sending data to other peer")
 	start := time.Now()
 	_, err = io.Copy(commStream, file)

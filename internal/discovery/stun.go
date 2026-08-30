@@ -1,4 +1,4 @@
-package stundiscover
+package discovery
 
 import (
 	"crypto/rand"

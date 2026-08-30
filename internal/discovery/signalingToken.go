@@ -1,8 +1,6 @@
-package encryption
+package discovery
 
 import (
-	localdiscover "cmd/ftu/main.go/internal/local-discover"
-	stundiscover "cmd/ftu/main.go/internal/stun-discover"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
@@ -29,8 +27,8 @@ type connectionCandidates struct {
 
 // Orchestrate encryptation and base64 codification
 func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
-	stunClient := stundiscover.Client{}
-	local_response := localdiscover.GetLocalUDPAddr(conn)
+	stunClient := Client{}
+	local_response := GetLocalUDPAddr(conn)
 	stun_response, _ := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
 	public, priv := ed55519TokenGen()
 	connCandidates := connectionCandidates{LocalAddress: local_response, StunPublicAddress: stun_response, Ed25519PublicToken: &public}

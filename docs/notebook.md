@@ -169,3 +169,11 @@ No método Update(msg tea.Msg) (tea.Model, tea.Cmd):
 5. No stateTransferring: 
     * Dispara-se a transferência QUIC em background. O escritor/leitor do QUIC atualiza um contador de bytes transmitidos.
     * Uma rotina em segundo plano calcula a velocidade (bytes por segundo) e despacha atualizações periódicas de progresso para a UI.* A tela exibe a animação do avião de papel cruzando de uma caixa para a outra, com a barra de progresso (bubbles/progress) e a velocidade correndo abaixo.
+
+
+**NOTA BEM**
+Discovery       → "Onde está o peer?"
+Connectivity    → "Como consigo chegar ao peer?"
+Transport       → "Como envio/recebo bytes?"
+Protocol        → "O que significam esses bytes?"
+Transfer        → "Como movo e valido o payload?"
