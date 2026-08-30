@@ -1,18 +1,22 @@
 package protocol
 
 type Method string
-type Header string
 type StatusCode int
 
-const (
-	MethodSend   Method = "SEND"
-	MethodCancel Method = "CANCEL"
-)
+type Request struct {
+	Method   Method
+	FileName string
+	FileSize int64
+	FileHash string
+}
+
+type Response struct {
+	Status StatusCode
+}
 
 const (
-	HeaderFileName Header = "File-Name"
-	HeaderFileSize Header = "File-Size" // size in bytes
-	HeaderFileHash Header = "File-Hash" // hash to verify file integrity
+	SEND   Method = "SEND"
+	CANCEL Method = "CANCEL"
 )
 
 const (

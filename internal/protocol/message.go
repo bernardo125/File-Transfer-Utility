@@ -1,32 +1,44 @@
 package protocol
 
 import (
-	"encoding/binary"
+	"encoding/json"
 	"os"
 )
 
-// payload size (8 size + 2 byte filename_len +  n bytes filename = 8 + 2 + n bytes)
-func buildMetaDataPayload(fileStats os.FileInfo) []byte {
+// HTTP-like protocol with json in control stream
 
-	nameBytes := []byte(fileStats.Name())
-	fileNameLength := len(nameBytes)
-	payload := make([]byte, FILE_META_PAYLOAD_MIN_LENGTH+fileNameLength)
-	// file size
-	binary.BigEndian.PutUint64(payload[0:8], uint64(fileStats.Size()))
-	// filename Length to avoid network buffer errors
-	binary.BigEndian.PutUint16(payload[8:10], uint16(fileNameLength))
+// build metadata payload by request struct
+func buildMetaDataSendFile(fileStats os.FileInfo) ([]byte, error) {
+	fileName := fileStats.Name()
+	fileSize := fileStats.Size()
+	request := Request{Method: SEND, FileName: fileName, FileSize: fileSize}
 
-	// filename
-	copy(payload[10:], nameBytes)
-
-	return payload
+	// Using JSON serialization exclusively on the control stream has no measurable impact on file transmission performance
+	return json.Marshal(request)
 }
 
-/*
-func receiveMetaDataPayload(payloadBytes []byte) (fileStats os.FileInfo) {
-	fileSize := int64(payloadBytes[0:8])
-	filenameLen := int16(payloadBytes[8:10])
-	filename := string(payloadBytes[10:filenameLen])
+func receiveMetaDataFile(payloadBytes []byte) (*Request, error) {
+	request := Request{}
+	err := json.Unmarshal(payloadBytes, &request)
+	if err != nil {
+		return nil, err
+	}
 
+	return &request, nil
 }
-*/
+
+func buildMetaDataCancelFile() ([]byte, error) {
+	cancelRequest := Request{Method: CANCEL}
+	return json.Marshal(cancelRequest)
+}
+
+func buildMetadataResponse(code StatusCode) ([]byte, error) {
+	response := Response{Status: code}
+	return json.Marshal(response)
+}
+
+func receiveMetadataResponse(payloadBytes []byte) StatusCode {
+	response := Response{}
+	json.Unmarshal(payloadBytes, &response)
+	return response.Status
+}

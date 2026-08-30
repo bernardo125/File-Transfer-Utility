@@ -34,7 +34,10 @@ func sendFileToPeer(fileName string, conn *quic.Conn, commStream *quic.Stream) e
 		return err
 	}
 	// metadata of file
-	metaPayload := buildMetaDataPayload(fileStats)
+	metaPayload, err := buildMetaDataSendFile(fileStats)
+	if err != nil {
+		return err
+	}
 
 	//send metadata
 	err = transfer.SendMetadata(metaPayload, commStream)
