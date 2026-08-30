@@ -10,14 +10,14 @@ import (
 func selectFileToSend(fileName string, conn *quic.Conn) (*os.File, os.FileInfo, error) {
 	file, openErr := os.Open(fileName)
 	if openErr != nil {
-		conn.CloseWithError(quic.ApplicationErrorCode(101), openErr.Error())
+		conn.CloseWithError(quic.ApplicationErrorCode(StatusInternalError), openErr.Error())
 		return nil, nil, openErr
 	}
 
 	fileStat, statErr := file.Stat()
 	if statErr != nil {
 		file.Close()
-		conn.CloseWithError(quic.ApplicationErrorCode(101), openErr.Error())
+		conn.CloseWithError(quic.ApplicationErrorCode(StatusInternalError), openErr.Error())
 		return nil, nil, statErr
 	}
 
