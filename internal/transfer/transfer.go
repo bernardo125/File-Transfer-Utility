@@ -1,8 +1,6 @@
 package transfer
 
 import (
-	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -11,81 +9,28 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-const FILE_META_PAYLOAD_MIN_LENGTH = 10
-const TRANSPORT_ERROR = 0x3
-
-func selectFileToSend(fileName string, conn *quic.Conn) (*os.File, os.FileInfo, error) {
-	file, openErr := os.Open(fileName)
-	if openErr != nil {
-		conn.CloseWithError(quic.ApplicationErrorCode(101), openErr.Error())
-		return nil, nil, openErr
-	}
-
-	fileStat, statErr := file.Stat()
-	if statErr != nil {
-		file.Close()
-		conn.CloseWithError(quic.ApplicationErrorCode(101), openErr.Error())
-		return nil, nil, statErr
-	}
-
-	file.Close()
-
-	return file, fileStat, nil
-
-}
-
-// payload size (8 size + 2 byte filename_len +  n bytes filename = 8 + 2 + n bytes)
-func buildMetaDataPayload(fileStats os.FileInfo) []byte {
-
-	nameBytes := []byte(fileStats.Name())
-	fileNameLength := len(nameBytes)
-	payload := make([]byte, FILE_META_PAYLOAD_MIN_LENGTH+fileNameLength)
-	// file size
-	binary.BigEndian.PutUint64(payload[0:8], uint64(fileStats.Size()))
-	// filename Length to avoid network buffer errors
-	binary.BigEndian.PutUint16(payload[8:10], uint16(fileNameLength))
-
-	// filename
-	copy(payload[10:], nameBytes)
-
-	return payload
-}
-
-/*
-func receiveMetaDataPayload(payloadBytes []byte) (fileStats os.FileInfo) {
-	fileSize := int64(payloadBytes[0:8])
-	filenameLen := int16(payloadBytes[8:10])
-	filename := string(payloadBytes[10:filenameLen])
-
-}
-*/
-
 // Function to send file to other peer (initialization of stream on quic module)
-func sendFile(fileName string, conn *quic.Conn, commStream *quic.Stream) error {
-	// file selection
-	file, fileStats, err := selectFileToSend(fileName, conn)
+func SendFile(file *os.File, conn *quic.Conn, commStream *quic.Stream) error {
+	defer commStream.Close()
+	log.Println("Sending data to other peer")
+	start := time.Now()
+	_, err := io.Copy(commStream, file)
 	if err != nil {
 		return err
 	}
-	// metadata of file
-	metaPayload := buildMetaDataPayload(fileStats)
+	log.Printf("Finished transfer in %.2f seconds!", time.Since(start).Seconds())
+	return nil
 
-	defer commStream.Close()
+}
 
+func SendMetadata(metadata []byte, commStream *quic.Stream) error {
 	// send file metadata
-	_, writeMetaErr := commStream.Write(metaPayload)
+	log.Println("Sending metadata to other peer")
+	_, writeMetaErr := commStream.Write(metadata)
 	if writeMetaErr != nil {
-		conn.CloseWithError(TRANSPORT_ERROR, writeMetaErr.Error())
 		return writeMetaErr
 	}
 
-	log.Println("Sending data to other peer")
-	start := time.Now()
-	_, err = io.Copy(commStream, file)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Finished transfer in %.2f seconds!", time.Since(start).Seconds())
 	return nil
 
 }
