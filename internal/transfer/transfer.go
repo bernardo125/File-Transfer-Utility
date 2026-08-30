@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -23,6 +24,36 @@ func SendFile(file *os.File, conn *quic.Conn, commStream *quic.Stream) error {
 
 }
 
+func SelectFileToSend(fileName string, conn *quic.Conn) (file *os.File, stats os.FileInfo, hash string, err error) {
+	// Use os.Open for read-only access.
+	file, err = os.Open(fileName)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to open file: %w", err)
+	}
+
+	// Ensure the file is closed even if errors occur later.
+	// Capture the close error only if no other error occurred.
+	defer func() {
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("failed to close file: %w", cerr)
+		}
+	}()
+
+	fileStat, statErr := file.Stat()
+	if statErr != nil {
+		file.Close()
+		return nil, nil, "", fmt.Errorf("failed to get file stats: %w", err)
+	}
+
+	file.Close()
+
+	// get hash value of file
+	hash, err = hashFileSHA256(file)
+
+	return file, fileStat, hash, err // err will be nil unless file.Close() failed
+
+}
+
 func SendMetadata(metadata []byte, commStream *quic.Stream) error {
 	// send file metadata
 	log.Println("Sending metadata to other peer")
@@ -35,13 +66,11 @@ func SendMetadata(metadata []byte, commStream *quic.Stream) error {
 
 }
 
-/*
 // recieves a file from whoever establishes a quic connection with the other peer
 func receiveFile(addr string, conn *quic.Conn, commStream *quic.Stream) error {
-	newFile, err := os.Create(saveLocation + "/" + friend.FileName)
+	newFile, err := os.Create(addr)
 	if err != nil {
 		log.Println("Error: " + err.Error())
-		notifyFrontEnd(err.Error() + "")
 		return err
 	}
 	defer newFile.Close()
@@ -51,6 +80,6 @@ func receiveFile(addr string, conn *quic.Conn, commStream *quic.Stream) error {
 
 	io.Copy(newFile, commStream)
 
-	fmt.Printf("Finished transfer in %.2f seconds!", time.Since(start).Seconds())
+	log.Printf("Finished transfer in %.2f seconds!", time.Since(start).Seconds())
 	return nil
-}*/
+}

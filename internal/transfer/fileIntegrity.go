@@ -9,26 +9,14 @@ import (
 )
 
 // hashFileSHA256 computes the SHA256 hash of a file.
-func hashFileSHA256(filePath string) (string, error) {
-	// Use os.Open for read-only access.
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open file: %w", err)
-	}
-	// Ensure the file is closed even if errors occur later.
-	// Capture the close error only if no other error occurred.
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("failed to close file: %w", cerr)
-		}
-	}()
+func hashFileSHA256(file *os.File) (string, error) {
 
 	// Create a new SHA256 hash interface.
 	hash := sha256.New()
 
 	// io.Copy efficiently copies data from the file to the hash function.
 	// It handles buffering internally.
-	if _, err = io.Copy(hash, file); err != nil {
+	if _, err := io.Copy(hash, file); err != nil {
 		return "", fmt.Errorf("failed to copy file content to hash: %w", err)
 	}
 
@@ -37,5 +25,5 @@ func hashFileSHA256(filePath string) (string, error) {
 	hashInBytes := hash.Sum(nil)
 	hashString := fmt.Sprintf("%x", hashInBytes)
 
-	return hashString, err // err will be nil unless file.Close() failed
+	return hashString, nil
 }

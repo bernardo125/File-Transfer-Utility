@@ -8,10 +8,10 @@ import (
 // HTTP-like protocol with json in control stream
 
 // build metadata payload by request struct
-func buildMetaDataSendFile(fileStats os.FileInfo) ([]byte, error) {
+func buildMetaDataSendFile(fileStats os.FileInfo, hash string) ([]byte, error) {
 	fileName := fileStats.Name()
 	fileSize := fileStats.Size()
-	request := Request{Method: SEND, FileName: fileName, FileSize: fileSize}
+	request := Request{Method: SEND, FileName: fileName, FileSize: fileSize, FileHash: hash}
 
 	// Using JSON serialization exclusively on the control stream has no measurable impact on file transmission performance
 	return json.Marshal(request)
