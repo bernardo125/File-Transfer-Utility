@@ -8,22 +8,21 @@ import (
 	"os"
 )
 
-// hashFileSHA256 computes the SHA256 hash of a file.
-func hashFileSHA256(file *os.File) (string, error) {
+// HashFileSHA256 computes the SHA256 hash of an open file and rewinds the read offset to 0.
+func HashFileSHA256(file *os.File) (string, error) {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("failed to seek file start: %w", err)
+	}
 
-	// Create a new SHA256 hash interface.
 	hash := sha256.New()
-
-	// io.Copy efficiently copies data from the file to the hash function.
-	// It handles buffering internally.
-	if _, err := io.Copy(hash, file); err != nil {
+	buf := make([]byte, 64*1024)
+	if _, err := io.CopyBuffer(hash, file, buf); err != nil {
 		return "", fmt.Errorf("failed to copy file content to hash: %w", err)
 	}
 
-	// Get the resulting hash sum as a byte slice and format it as hex.
-	// hash.Sum(nil) appends the hash to a nil slice.
-	hashInBytes := hash.Sum(nil)
-	hashString := fmt.Sprintf("%x", hashInBytes)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("failed to reset file position: %w", err)
+	}
 
-	return hashString, nil
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }

@@ -1,37 +1,81 @@
 package main
 
 import (
-	connectivity "cmd/ftu/main.go/internal/connectivity"
-	discovery "cmd/ftu/main.go/internal/discovery"
-	transport "cmd/ftu/main.go/internal/transport"
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
+
+	"ftu/internal/connectivity"
+	"ftu/internal/discovery"
+	"ftu/internal/protocol"
+	"ftu/internal/transport"
 )
 
 func main() {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("=== File Transfer Utility ===")
+	fmt.Println("[1] Enviar Ficheiro")
+	fmt.Println("[2] Receber Ficheiro")
+	fmt.Println("[3] Sair")
+	fmt.Print("Escolha uma opção: ")
+
+	option, _ := reader.ReadString('\n')
+	option = strings.TrimSpace(option)
+
+	if option == "3" {
+		os.Exit(0)
+	}
 	localIP := discovery.GetLocalIP()
 	conn := transport.InitializeUDPSocket(localIP)
-	defer conn.Close() // defers the close of connection until the surrounding function returns
-	publicToken, privateKey := discovery.CreateKey(conn)
-	fmt.Printf("Token: %s\n", publicToken)
+	defer conn.Close()
 
-	var other_peer_token string
-	fmt.Print("Enter other peer token code: ")
-	fmt.Scan(&other_peer_token)
+	fmt.Println("A contactar servidor STUN para gerar token...")
+	myToken, myPrivKey := discovery.CreateKey(conn)
 
-	// convert key to net.udpAdrr
-	local, remote, otherPeerPublicKey := discovery.GetPeer(other_peer_token)
-	fmt.Printf("OTHER PEER:\nLOCAL IP: %s, PORT: %d\nREMOTE IP: %s, PORT: %d\n", local.IP, local.Port, remote.IP, remote.Port)
-	resultChn := connectivity.UDPHolePunch(conn, local, remote, &privateKey, otherPeerPublicKey)
-	result := <-resultChn
+	fmt.Printf("\nO SEU TOKEN:\n%s\n\n", myToken)
 
-	if result.Err != nil {
-		fmt.Printf("Hole Punching error: %s\n", result.Err)
-		return
-	} else {
-		fmt.Printf("Hole Punching sucessfuly conected to: %s\n", result.Addr.String())
+	fmt.Print("Insira o token do outro peer: ")
+	peerToken, _ := reader.ReadString('\n')
+	peerToken = strings.TrimSpace(peerToken)
+
+	// A função GetPeer devolve peerLocal além do peerRemote e a chave pública
+	peerLocal, peerRemote, peerPubKey := discovery.GetPeer(peerToken)
+
+	fmt.Println("A executar UDP Hole Punching...")
+
+	// Executa o Hole Punch usando o módulo connectivity
+	punchCh := connectivity.UDPHolePunch(conn, peerLocal, peerRemote, &myPrivKey, peerPubKey)
+	punchResult := <-punchCh // Aguarda a conclusão via channel
+
+	if punchResult.Err != nil {
+		fmt.Printf("Falha no Hole Punch: %v\n", punchResult.Err)
+		os.Exit(1)
 	}
 
-	transport.QuicUpgrade(conn, result.Addr, &privateKey, otherPeerPublicKey)
-	fmt.Print("TEST: ")
-	fmt.Scan(&other_peer_token)
+	fmt.Printf("Hole Punch bem-sucedido para: %s\n", punchResult.Addr.String())
+
+	fmt.Println("A estabelecer ligação QUIC...")
+	// Conecta ao endereço validado pelo Hole Punch (punchResult.Addr)
+	quicConn, err := transport.QuicUpgrade(conn, punchResult.Addr, &myPrivKey, peerPubKey)
+	if err != nil {
+		fmt.Printf("Erro na ligação: %v\n", err)
+		os.Exit(1)
+	}
+	defer quicConn.CloseWithError(0, "Conexão terminada")
+
+	fmt.Println("Ligação estabelecida com sucesso!")
+
+	if option == "1" {
+		err = protocol.SenderLoop(quicConn, reader)
+	} else if option == "2" {
+		err = protocol.ReceiverLoop(quicConn, reader)
+	} else {
+		fmt.Println("Opção inválida.")
+	}
+
+	if err != nil {
+		fmt.Printf("Erro durante a execução: %v\n", err)
+	}
 }

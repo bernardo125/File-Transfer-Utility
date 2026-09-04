@@ -1,4 +1,4 @@
-package udpholepunch
+package connectivity
 
 import (
 	"bytes"
