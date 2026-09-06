@@ -4,7 +4,6 @@ type Method string
 type StatusCode int
 
 type Request struct {
-	Method   Method
 	FileName string
 	FileSize int64
 	FileHash string
@@ -13,11 +12,6 @@ type Request struct {
 type Response struct {
 	Status StatusCode
 }
-
-const (
-	SEND   Method = "SEND"
-	CANCEL Method = "CANCEL"
-)
 
 const (
 	StatusContinue      StatusCode = 100 // Metadata accepted
