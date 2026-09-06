@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"os"
 
@@ -67,12 +68,24 @@ func BuildCodeResponse(code StatusCode) ([]byte, error) {
 
 // SHARED - SENDER AND RECEIVER
 func sendControlMessage(metaPayload []byte, controlStream *quic.Stream) error {
-	_, err := controlStream.Write(metaPayload)
+	// send payload length
+	length := uint32(len(metaPayload))
+	err := binary.Write(controlStream, binary.BigEndian, length)
+	if err != nil {
+		return err
+	}
+	_, err = controlStream.Write(metaPayload)
 	return err
 }
 
 func receiveControlMessage(controlStream *quic.Stream) (response []byte, err error) {
-	recvBuff := make([]byte, 10)
+	// read payload length
+	var length uint32
+	err = binary.Read(controlStream, binary.BigEndian, &length)
+	if err != nil {
+		return nil, err
+	}
+	recvBuff := make([]byte, length)
 	_, err = controlStream.Read(recvBuff)
 	if err != nil {
 		return nil, err
