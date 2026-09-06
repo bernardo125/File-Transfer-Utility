@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/binary"
 	"encoding/json"
+	"io"
 	"os"
 
 	"github.com/quic-go/quic-go"
@@ -32,6 +33,9 @@ func BuildMetaDataRequest(fileStats os.FileInfo, hash string) ([]byte, error) {
 func ReceiveMetadataResponse(controlStream *quic.Stream) (*Response, error) {
 	var response Response
 	respPayload, err := receiveControlMessage(controlStream)
+	if err != nil {
+		return nil, err
+	}
 	err = json.Unmarshal(respPayload, &response)
 	if err != nil {
 		return nil, err
@@ -86,7 +90,7 @@ func receiveControlMessage(controlStream *quic.Stream) (response []byte, err err
 		return nil, err
 	}
 	recvBuff := make([]byte, length)
-	_, err = controlStream.Read(recvBuff)
+	_, err = io.ReadFull(controlStream, recvBuff) // ReadFull garantees full read of length bytes (parcial reading problem)
 	if err != nil {
 		return nil, err
 	}

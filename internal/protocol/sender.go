@@ -91,6 +91,9 @@ func SendFileToPeer(conn *quic.Conn, filePath string) error {
 
 	// await receiver's final checksum verification response
 	finalStatus, err := ReceiveMetadataResponse(controlStream)
+	if err != nil {
+		return err
+	}
 
 	if finalStatus.Status != StatusOK {
 		return fmt.Errorf("destinatário reportou falha na verificação de integridade (Status: %d)", finalStatus)

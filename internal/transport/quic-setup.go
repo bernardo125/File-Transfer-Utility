@@ -71,14 +71,8 @@ func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.P
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Configure QUIC with extended idle timeout and keepalive
-	quicConfig := &quic.Config{
-		MaxIdleTimeout:  5 * time.Minute,  // Extended idle timeout
-		KeepAlivePeriod: 30 * time.Second, // Send keepalive pings
-	}
-
 	// start tls self certificate to secure data transfer
-	quicConn, err := quic.Dial(ctx, mySocket, destination, generateTLSConfig(priv, otherPeerPublicKey), quicConfig)
+	quicConn, err := quic.Dial(ctx, mySocket, destination, generateTLSConfig(priv, otherPeerPublicKey), defaultQuicConfig())
 	if err != nil {
 		log.Printf("Failed to connect to %s: %v", destination, err)
 		return nil, fmt.Errorf("failed to connect to any candidate")
@@ -90,7 +84,7 @@ func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.P
 }
 
 func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
-	listener, err := quic.Listen(mySocket, generateTLSConfig(priv, otherPeerPublicKey), nil)
+	listener, err := quic.Listen(mySocket, generateTLSConfig(priv, otherPeerPublicKey), defaultQuicConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -102,4 +96,12 @@ func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey, otherPeerPubl
 	}
 	log.Printf("Successfully connected to %s", conn.RemoteAddr())
 	return conn, nil
+}
+
+func defaultQuicConfig() *quic.Config {
+	// Configure QUIC with extended idle timeout and keepalive
+	return &quic.Config{
+		MaxIdleTimeout:  5 * time.Minute,  // Extended idle timeout
+		KeepAlivePeriod: 30 * time.Second, // Send keepalive pings
+	}
 }
