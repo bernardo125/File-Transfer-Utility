@@ -8,6 +8,9 @@ import (
 	"strings"
 
 	"ftu/internal/transfer"
+	clierr "ftu/pkg/cli/errors"
+	"ftu/pkg/cli/info"
+	"ftu/pkg/cli/input"
 
 	"github.com/quic-go/quic-go"
 )
@@ -15,12 +18,10 @@ import (
 // SenderLoop coordinates the sender workflow, prompting for files and orchestrating peer communication.
 func SenderLoop(conn *quic.Conn, reader *bufio.Reader) error {
 	for {
-		fmt.Print("\nIntroduza o caminho do ficheiro a enviar (ou 'sair' para terminar): ")
-		filePath, err := reader.ReadString('\n')
+		filePath, err := input.AskFilePath(reader)
 		if err != nil {
 			return err
 		}
-		filePath = strings.TrimSpace(filePath)
 		if filePath == "" {
 			continue
 		}
@@ -30,16 +31,14 @@ func SenderLoop(conn *quic.Conn, reader *bufio.Reader) error {
 
 		err = SendFileToPeer(conn, filePath)
 		if err != nil {
-			fmt.Printf("[-] Falha no envio: %v\n", err)
+			clierr.PrintSendFailure(err)
 		}
 
-		fmt.Print("\nDeseja enviar outro ficheiro? (S/N): ")
-		ans, err := reader.ReadString('\n')
+		sendAnother, err := input.AskSendAnother(reader)
 		if err != nil {
 			return err
 		}
-		ans = strings.TrimSpace(strings.ToUpper(ans))
-		if ans != "S" && ans != "Y" {
+		if !sendAnother {
 			break
 		}
 	}
@@ -117,6 +116,6 @@ func SendFileToPeer(conn *quic.Conn, filePath string) error {
 	}
 
 	log.Println("[Sender] Destinatário validou com sucesso a integridade do ficheiro!")
-	fmt.Println("\n[+] Transferência e verificação de integridade concluídas com sucesso!")
+	info.PrintSendSuccess()
 	return nil
 }

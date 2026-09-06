@@ -34,11 +34,6 @@ func ReceiveMetaDataFile(payloadBytes []byte) (*Request, error) {
 	return &request, nil
 }
 
-// receiveMetaDataFile keeps backwards compatibility for unexported usage.
-func receiveMetaDataFile(payloadBytes []byte) (*Request, error) {
-	return ReceiveMetaDataFile(payloadBytes)
-}
-
 // BuildMetaDataCancelFile builds the metadata payload for a CANCEL request.
 func BuildMetaDataCancelFile() ([]byte, error) {
 	cancelRequest := Request{Method: CANCEL}
@@ -63,7 +58,8 @@ func ReceiveMetadataResponse(payloadBytes []byte) StatusCode {
 // ParseMetadataResponse parses response payload and returns Response struct with error handling.
 func ParseMetadataResponse(payloadBytes []byte) (*Response, error) {
 	var response Response
-	if err := json.Unmarshal(payloadBytes, &response); err != nil {
+	err := json.Unmarshal(payloadBytes, &response)
+	if err != nil {
 		return nil, err
 	}
 	return &response, nil

@@ -6,16 +6,18 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"strings"
 
 	"ftu/internal/transfer"
+	clierr "ftu/pkg/cli/errors"
+	"ftu/pkg/cli/info"
+	"ftu/pkg/cli/input"
 
 	"github.com/quic-go/quic-go"
 )
 
 // ReceiverLoop waits for incoming QUIC streams from the peer and handles file transfer requests.
 func ReceiverLoop(conn *quic.Conn, reader *bufio.Reader) error {
-	fmt.Println("\n[*] À espera de pedidos de transferência do peer...")
+	info.PrintWaitingForTransfer()
 	for {
 		stream, err := conn.AcceptStream(context.Background())
 		if err != nil {
@@ -24,19 +26,17 @@ func ReceiverLoop(conn *quic.Conn, reader *bufio.Reader) error {
 
 		err = HandleIncomingTransfer(stream, reader)
 		if err != nil {
-			fmt.Printf("[-] Erro na transferência: %v\n", err)
+			clierr.PrintTransferError(err)
 		}
 
-		fmt.Print("\nDeseja continuar na sessão a aguardar mais ficheiros? (S/N): ")
-		ans, err := reader.ReadString('\n')
+		continueReceiving, err := input.AskContinueReceiving(reader)
 		if err != nil {
 			return err
 		}
-		ans = strings.TrimSpace(strings.ToUpper(ans))
-		if ans != "S" && ans != "Y" {
+		if !continueReceiving {
 			break
 		}
-		fmt.Println("\n[*] À espera do próximo ficheiro...")
+		info.PrintWaitingForNextFile()
 	}
 	return nil
 }
@@ -66,15 +66,10 @@ func HandleIncomingTransfer(stream *quic.Stream, reader *bufio.Reader) error {
 	}
 
 	// 2. Prompt user to accept or reject transfer
-	fmt.Printf("\n[?] Peer quer enviar o ficheiro '%s' (%.2f MB). Aceitar? (S/N): ",
-		req.FileName, float64(req.FileSize)/(1024*1024))
-
-	ans, err := reader.ReadString('\n')
+	accepted, err := input.AskAcceptTransfer(reader, req.FileName, req.FileSize)
 	if err != nil {
 		return err
 	}
-	ans = strings.TrimSpace(strings.ToUpper(ans))
-	accepted := (ans == "S" || ans == "Y")
 
 	if !accepted {
 		log.Println("[Receiver] Transferência recusada pelo utilizador.")
@@ -113,6 +108,6 @@ func HandleIncomingTransfer(stream *quic.Stream, reader *bufio.Reader) error {
 	}
 
 	log.Printf("[Receiver] Ficheiro '%s' transferido e validado com sucesso!", destFileName)
-	fmt.Printf("\n[+] Ficheiro '%s' descarregado e verificado com sucesso!\n", destFileName)
+	info.PrintTransferSuccess(destFileName)
 	return nil
 }
