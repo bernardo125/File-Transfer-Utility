@@ -5,9 +5,9 @@ import "fmt"
 // PrintMenu displays the main menu options.
 func PrintMenu() {
 	fmt.Println("=== File Transfer Utility ===")
-	fmt.Println("[1] Enviar Ficheiro")
-	fmt.Println("[2] Receber Ficheiro")
-	fmt.Println("[3] Sair")
+	fmt.Println("[1] Send file")
+	fmt.Println("[2] Receive file")
+	fmt.Println("[3] Exit")
 }
 
 // PrintMyToken displays the user's signaling token.
@@ -17,40 +17,40 @@ func PrintMyToken(token string) {
 
 // PrintExecutingHolePunch displays status when starting UDP hole punching.
 func PrintExecutingHolePunch() {
-	fmt.Println("A executar UDP Hole Punching...")
+	fmt.Println("Executing UDP Hole Punching...")
 }
 
 // PrintHolePunchSuccess displays success after UDP hole punching succeeds.
 func PrintHolePunchSuccess() {
-	fmt.Printf("Hole Punch bem-sucedido")
+	fmt.Printf("Hole Punch successful")
 }
 
 // PrintConnectingQUIC displays status when establishing the QUIC connection.
 func PrintConnectingQUIC() {
-	fmt.Println("A estabelecer ligação QUIC...")
+	fmt.Println("Establishing QUIC connection...")
 }
 
 // PrintConnectionSuccess displays success when QUIC connection is established.
 func PrintConnectionSuccess() {
-	fmt.Println("Ligação estabelecida com sucesso!")
+	fmt.Println("Connection established successfully!")
 }
 
 // PrintSendSuccess displays a success message when file transfer and verification succeed.
 func PrintSendSuccess() {
-	fmt.Println("\n[+] Transferência e verificação de integridade concluídas com sucesso!")
+	fmt.Println("\n[+] Transfer and integrity verification completed successfully!")
 }
 
 // PrintWaitingForTransfer displays status when waiting for incoming peer transfer requests.
 func PrintWaitingForTransfer() {
-	fmt.Println("\n[*] À espera de pedidos de transferência do peer...")
+	fmt.Println("\n[*] Waiting for transfer requests from the peer...")
 }
 
 // PrintWaitingForNextFile displays status when waiting for the next file transfer.
 func PrintWaitingForNextFile() {
-	fmt.Println("\n[*] À espera do próximo ficheiro...")
+	fmt.Println("\n[*] Waiting for the next file...")
 }
 
 // PrintTransferSuccess displays a success message when a file has been downloaded and verified.
 func PrintTransferSuccess(fileName string) {
-	fmt.Printf("\n[+] Ficheiro '%s' descarregado e verificado com sucesso!\n", fileName)
+	fmt.Printf("\n[+] File '%s' downloaded and verified successfully!\n", fileName)
 }
