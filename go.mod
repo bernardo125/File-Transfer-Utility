@@ -1,4 +1,4 @@
-module cmd/ftu/main.go
+module ftu
 
 go 1.26.4
 

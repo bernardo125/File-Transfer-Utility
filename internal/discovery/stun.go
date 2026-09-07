@@ -1,4 +1,4 @@
-package stundiscover
+package discovery
 
 import (
 	"crypto/rand"
@@ -57,6 +57,7 @@ func (c Client) SendBindingRequest(conn *net.UDPConn, stunAddr string) (*net.UDP
 	if err != nil {
 		log.Fatal("Receive error: ", err)
 	}
+	conn.SetReadDeadline(time.Time{}) // clear deadline after receive STUN
 	return parseXORMappedAddress(buffer)
 }
 

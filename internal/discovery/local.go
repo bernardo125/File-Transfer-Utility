@@ -1,4 +1,4 @@
-package localdiscover
+package discovery
 
 import (
 	"log"

@@ -1,10 +1,9 @@
-package udpholepunch
+package connectivity
 
 import (
 	"bytes"
 	"crypto/ed25519"
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"time"
@@ -44,7 +43,7 @@ type HolePunchResult struct {
 }
 
 func getDefaultConfig() (config HolePunchConfig) {
-	return HolePunchConfig{Timeout: 60 * time.Second, ProbeInterval: 200 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 10}
+	return HolePunchConfig{Timeout: 60 * time.Second, ProbeInterval: 300 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 100}
 }
 
 func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
@@ -90,7 +89,9 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr, myPublicKey []byte) {
 }
 
 func (punch *HolePuncher) listenPeer() {
+	defer punch.socket.SetReadDeadline(time.Time{}) // socket without time out to QUIC
 	buffer := make([]byte, 256)
+
 	for {
 		punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
 		n, addr, err := punch.socket.ReadFromUDP(buffer)
@@ -116,7 +117,7 @@ func (punch *HolePuncher) listenPeer() {
 		isExpectedToken := bytes.Equal(msg[1:33], punch.otherPeerPublicKey)
 
 		if isExpectedToken {
-			fmt.Printf("PUNCH RECEIVED BY: %s\n", addr.IP)
+			punch.socket.SetDeadline(time.Time{}) //clean deadline
 			punch.resultCh <- HolePunchResult{Addr: addr, Err: nil}
 			return
 

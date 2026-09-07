@@ -1,13 +1,12 @@
-package encryption
+package discovery
 
 import (
-	localdiscover "cmd/ftu/main.go/internal/local-discover"
-	stundiscover "cmd/ftu/main.go/internal/stun-discover"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net"
 
@@ -29,8 +28,8 @@ type connectionCandidates struct {
 
 // Orchestrate encryptation and base64 codification
 func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
-	stunClient := stundiscover.Client{}
-	local_response := localdiscover.GetLocalUDPAddr(conn)
+	stunClient := Client{}
+	local_response := GetLocalUDPAddr(conn)
 	stun_response, _ := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
 	public, priv := ed55519TokenGen()
 	connCandidates := connectionCandidates{LocalAddress: local_response, StunPublicAddress: stun_response, Ed25519PublicToken: &public}
@@ -49,7 +48,10 @@ func ed55519TokenGen() (public ed25519.PublicKey, priv ed25519.PrivateKey) {
 	return public, priv
 }
 
-func GetPeer(key string) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, publickey *ed25519.PublicKey) {
+func GetPeer(key string) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
+	if len(key) < 50 {
+		return nil, nil, nil, fmt.Errorf("That's not a token")
+	}
 	decodedBytes := base64Decoding(key)
 	nonce := decodedBytes[:12] // nonce is 12 bytes
 	cipherText := decodedBytes[12:]
@@ -102,10 +104,10 @@ func base64Enconding(data []byte) (b64token string) {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
-func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, publickey *ed25519.PublicKey) {
+func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
 	cipher, err := chacha20.NewUnauthenticatedCipher(secret, nonce)
 	if err != nil {
-		panic(err)
+		return nil, nil, nil, err
 	}
 
 	plaintext := make([]byte, len(ciphertext))
@@ -117,7 +119,7 @@ func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal 
 	peerRemote = endpoint.StunPublicAddress
 	publickey = endpoint.Ed25519PublicToken
 
-	return peerLocal, peerRemote, publickey
+	return peerLocal, peerRemote, publickey, nil
 }
 
 func decodeFrom16bytes(encodedText []byte) (decodedResponse *connectionCandidates) {

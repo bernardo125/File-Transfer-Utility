@@ -1,4 +1,4 @@
-package network
+package transport
 
 import (
 	"log"
@@ -13,5 +13,7 @@ func InitializeUDPSocket(localIP net.IP) (conn *net.UDPConn) {
 	if err != nil {
 		log.Fatal("Connection failed: ", err)
 	}
+	conn.SetReadBuffer(7 * 1024 * 1024)
+	conn.SetWriteBuffer(7 * 1024 * 1024)
 	return conn
 }
