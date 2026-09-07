@@ -90,7 +90,9 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr, myPublicKey []byte) {
 }
 
 func (punch *HolePuncher) listenPeer() {
+	defer punch.socket.SetReadDeadline(time.Time{}) // socket without time out to QUIC
 	buffer := make([]byte, 256)
+
 	for {
 		punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
 		n, addr, err := punch.socket.ReadFromUDP(buffer)
@@ -116,6 +118,7 @@ func (punch *HolePuncher) listenPeer() {
 		isExpectedToken := bytes.Equal(msg[1:33], punch.otherPeerPublicKey)
 
 		if isExpectedToken {
+			punch.socket.SetDeadline(time.Time{}) //clean deadline
 			fmt.Printf("PUNCH RECEIVED BY: %s\n", addr.IP)
 			punch.resultCh <- HolePunchResult{Addr: addr, Err: nil}
 			return

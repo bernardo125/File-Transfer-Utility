@@ -68,7 +68,7 @@ func QuicUpgrade(mySocket *net.UDPConn, destination *net.UDPAddr, privateKey *ed
 }
 
 func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	// start tls self certificate to secure data transfer
@@ -89,8 +89,10 @@ func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey, otherPeerPubl
 		return nil, err
 	}
 	defer listener.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
-	conn, err := listener.Accept(context.Background())
+	conn, err := listener.Accept(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +103,7 @@ func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey, otherPeerPubl
 func defaultQuicConfig() *quic.Config {
 	// Configure QUIC with extended idle timeout and keepalive
 	return &quic.Config{
-		MaxIdleTimeout:  5 * time.Minute,  // Extended idle timeout
-		KeepAlivePeriod: 30 * time.Second, // Send keepalive pings
+		MaxIdleTimeout:  30 * time.Second, // idle timeout
+		KeepAlivePeriod: 15 * time.Second, // Send keepalive pings
 	}
 }
