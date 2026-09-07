@@ -58,6 +58,13 @@ func AskFilePath(reader *bufio.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	// for windows copy paste compatibility
+	if strings.HasPrefix(filePath, "\"") {
+		filePath, _ = strings.CutPrefix(filePath, "\"")
+		filePath, _ = strings.CutSuffix(filePath, "\"")
+	}
+
 	return strings.TrimSpace(filePath), nil
 }
 
