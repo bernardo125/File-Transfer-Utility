@@ -25,7 +25,6 @@ func Run() {
 	conn := transport.InitializeUDPSocket(localIP)
 	defer conn.Close()
 
-	info.PrintContactingSTUN()
 	myToken, myPrivKey := discovery.CreateKey(conn)
 
 	info.PrintMyToken(myToken)
@@ -50,7 +49,7 @@ func Run() {
 		os.Exit(1)
 	}
 
-	info.PrintHolePunchSuccess(punchResult.Addr.String())
+	info.PrintHolePunchSuccess()
 
 	info.PrintConnectingQUIC()
 	// Conecta ao endereço validado pelo Hole Punch (punchResult.Addr)

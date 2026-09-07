@@ -12,12 +12,7 @@ func PrintMenu() {
 
 // PrintMyToken displays the user's signaling token.
 func PrintMyToken(token string) {
-	fmt.Printf("\nO SEU TOKEN:\n%s\n\n", token)
-}
-
-// PrintContactingSTUN displays status when contacting the STUN server.
-func PrintContactingSTUN() {
-	fmt.Println("A contactar servidor STUN para gerar token...")
+	fmt.Printf("\nYOUR TOKEN:\n%s\n\n", token)
 }
 
 // PrintExecutingHolePunch displays status when starting UDP hole punching.
@@ -26,8 +21,8 @@ func PrintExecutingHolePunch() {
 }
 
 // PrintHolePunchSuccess displays success after UDP hole punching succeeds.
-func PrintHolePunchSuccess(addr string) {
-	fmt.Printf("Hole Punch bem-sucedido para: %s\n", addr)
+func PrintHolePunchSuccess() {
+	fmt.Printf("Hole Punch bem-sucedido")
 }
 
 // PrintConnectingQUIC displays status when establishing the QUIC connection.

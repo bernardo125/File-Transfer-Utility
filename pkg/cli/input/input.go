@@ -18,7 +18,7 @@ func NewReader() *bufio.Reader {
 func AskMenuOption(reader *bufio.Reader) (string, error) {
 	for {
 		info.PrintMenu()
-		fmt.Print("Escolha uma opção: ")
+		fmt.Print("Choose a option: ")
 
 		option, err := reader.ReadString('\n')
 		if err != nil {
@@ -36,7 +36,7 @@ func AskMenuOption(reader *bufio.Reader) (string, error) {
 // AskPeerToken prompts the user to input the peer's token.
 func AskPeerToken(reader *bufio.Reader) (string, error) {
 	for {
-		fmt.Print("Insira o token do outro peer: ")
+		fmt.Print("Type your friend's token: ")
 		token, err := reader.ReadString('\n')
 		if err != nil {
 			continue
@@ -53,35 +53,36 @@ func AskPeerToken(reader *bufio.Reader) (string, error) {
 
 // AskFilePath prompts the user for the file path to send.
 func AskFilePath(reader *bufio.Reader) (string, error) {
-	fmt.Print("\nIntroduza o caminho do ficheiro a enviar (ou 'sair' para terminar): ")
+	fmt.Print("\nType the path of the file you want to send (or 'exit' to close): ")
 	filePath, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
 
+	filePath = strings.TrimSpace(filePath)
 	// for windows copy paste compatibility
 	if strings.HasPrefix(filePath, "\"") {
 		filePath, _ = strings.CutPrefix(filePath, "\"")
 		filePath, _ = strings.CutSuffix(filePath, "\"")
 	}
 
-	return strings.TrimSpace(filePath), nil
+	return filePath, nil
 }
 
 // AskSendAnother prompts the user whether they want to send another file.
 func AskSendAnother(reader *bufio.Reader) (bool, error) {
-	fmt.Print("\nDeseja enviar outro ficheiro? (S/N): ")
+	fmt.Print("\nDo you want to send other? (Y/N): ")
 	ans, err := reader.ReadString('\n')
 	if err != nil {
 		return false, err
 	}
 	ans = strings.TrimSpace(strings.ToUpper(ans))
-	return ans == "S" || ans == "Y", nil
+	return ans == "Y", nil
 }
 
 // AskAcceptTransfer prompts the receiver whether to accept or reject an incoming file transfer.
 func AskAcceptTransfer(reader *bufio.Reader, fileName string, fileSize int64) (bool, error) {
-	fmt.Printf("\n[?] Peer quer enviar o ficheiro '%s' (%.2f MB). Aceitar? (S/N): ",
+	fmt.Printf("\n[?] Peer wants to send '%s' (%.2f MB). Accept? (Y/N): ",
 		fileName, float64(fileSize)/(1024*1024))
 
 	ans, err := reader.ReadString('\n')
@@ -89,16 +90,16 @@ func AskAcceptTransfer(reader *bufio.Reader, fileName string, fileSize int64) (b
 		return false, err
 	}
 	ans = strings.TrimSpace(strings.ToUpper(ans))
-	return ans == "S" || ans == "Y", nil
+	return ans == "Y", nil
 }
 
 // AskContinueReceiving prompts the receiver whether to stay in the session waiting for more files.
 func AskContinueReceiving(reader *bufio.Reader) (bool, error) {
-	fmt.Print("\nDeseja continuar na sessão a aguardar mais ficheiros? (S/N): ")
+	fmt.Print("\nDo you want to wait to receive more files? (Y/N): ")
 	ans, err := reader.ReadString('\n')
 	if err != nil {
 		return false, err
 	}
 	ans = strings.TrimSpace(strings.ToUpper(ans))
-	return ans == "S" || ans == "Y", nil
+	return ans == "Y", nil
 }

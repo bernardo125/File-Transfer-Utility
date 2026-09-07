@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"time"
@@ -119,7 +118,6 @@ func (punch *HolePuncher) listenPeer() {
 
 		if isExpectedToken {
 			punch.socket.SetDeadline(time.Time{}) //clean deadline
-			fmt.Printf("PUNCH RECEIVED BY: %s\n", addr.IP)
 			punch.resultCh <- HolePunchResult{Addr: addr, Err: nil}
 			return
 

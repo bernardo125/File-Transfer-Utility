@@ -74,11 +74,11 @@ func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.P
 	// start tls self certificate to secure data transfer
 	quicConn, err := quic.Dial(ctx, mySocket, destination, generateTLSConfig(priv, otherPeerPublicKey), defaultQuicConfig())
 	if err != nil {
-		log.Printf("Failed to connect to %s: %v", destination, err)
+		log.Printf("Failed to connect")
 		return nil, fmt.Errorf("failed to connect to any candidate")
 	}
 
-	log.Printf("Successfully connected to %s", destination)
+	log.Printf("Successfully connected")
 	return quicConn, nil
 
 }
@@ -96,7 +96,7 @@ func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey, otherPeerPubl
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Successfully connected to %s", conn.RemoteAddr())
+	log.Printf("Successfully connected")
 	return conn, nil
 }
 
