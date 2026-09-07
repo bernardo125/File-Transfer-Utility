@@ -17,6 +17,11 @@ func PrintInvalidOption() {
 	fmt.Println("Opção inválida.")
 }
 
+// PrintInvalidToken displays an error message when an invalid token is entered.
+func PrintInvalidToken(err error) {
+	fmt.Printf("Token inválido: %v\n", err)
+}
+
 // PrintExecutionError displays an error that occurred during execution.
 func PrintExecutionError(err error) {
 	fmt.Printf("Erro durante a execução: %v\n", err)

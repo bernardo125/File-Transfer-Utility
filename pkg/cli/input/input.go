@@ -16,24 +16,39 @@ func NewReader() *bufio.Reader {
 
 // AskMenuOption displays the menu and prompts the user to select an option.
 func AskMenuOption(reader *bufio.Reader) (string, error) {
-	info.PrintMenu()
-	fmt.Print("Escolha uma opção: ")
+	for {
+		info.PrintMenu()
+		fmt.Print("Escolha uma opção: ")
 
-	option, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
+		option, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		option = strings.TrimSpace(option)
+
+		if option != "1" && option != "2" && option != "3" {
+			continue
+		}
+		return option, nil
 	}
-	return strings.TrimSpace(option), nil
 }
 
 // AskPeerToken prompts the user to input the peer's token.
 func AskPeerToken(reader *bufio.Reader) (string, error) {
-	fmt.Print("Insira o token do outro peer: ")
-	token, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
+	for {
+		fmt.Print("Insira o token do outro peer: ")
+		token, err := reader.ReadString('\n')
+		if err != nil {
+			continue
+		}
+
+		token = strings.TrimSpace(token)
+		if len(token) <= 12 {
+			fmt.Println("The token must have more than 12 bytes")
+			continue
+		}
+		return token, nil
 	}
-	return strings.TrimSpace(token), nil
 }
 
 // AskFilePath prompts the user for the file path to send.

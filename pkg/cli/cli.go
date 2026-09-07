@@ -30,10 +30,14 @@ func Run() {
 
 	info.PrintMyToken(myToken)
 
-	peerToken, _ := input.AskPeerToken(reader)
+	peerToken, err := input.AskPeerToken(reader)
 
 	// A função GetPeer devolve peerLocal além do peerRemote e a chave pública
-	peerLocal, peerRemote, peerPubKey := discovery.GetPeer(peerToken)
+	peerLocal, peerRemote, peerPubKey, err := discovery.GetPeer(peerToken)
+	if err != nil {
+		clierr.PrintConnectionError(err)
+		os.Exit(1)
+	}
 
 	info.PrintExecutingHolePunch()
 
@@ -59,11 +63,12 @@ func Run() {
 
 	info.PrintConnectionSuccess()
 
-	if option == "1" {
+	switch option {
+	case "1":
 		err = protocol.SenderLoop(quicConn, reader)
-	} else if option == "2" {
+	case "2":
 		err = protocol.ReceiverLoop(quicConn, reader)
-	} else {
+	default:
 		clierr.PrintInvalidOption()
 	}
 
