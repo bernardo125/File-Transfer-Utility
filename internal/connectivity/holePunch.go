@@ -43,7 +43,7 @@ type HolePunchResult struct {
 }
 
 func getDefaultConfig() (config HolePunchConfig) {
-	return HolePunchConfig{Timeout: 60 * time.Second, ProbeInterval: 200 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 10}
+	return HolePunchConfig{Timeout: 60 * time.Second, ProbeInterval: 300 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 100}
 }
 
 func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
