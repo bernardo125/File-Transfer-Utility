@@ -26,13 +26,14 @@ type HolePunchConfig struct {
 
 // hole puncher struct contains all required information to perform udp hole punch. May be updated to include TCP hole punch (not necessary for this project)
 type HolePuncher struct {
-	config             HolePunchConfig
-	socket             *net.UDPConn
-	peerLocalAddress   *net.UDPAddr
-	peerRemoteAddress  *net.UDPAddr
-	myPublicKey        []byte
-	otherPeerPublicKey []byte
-	resultCh           chan HolePunchResult
+	config                HolePunchConfig
+	socket                *net.UDPConn
+	peerLocalAddressIPV4  *net.UDPAddr
+	peerRemoteAddressIPV4 *net.UDPAddr
+	peerPublicAddressIPV6 *net.UDPAddr
+	myPublicKey           []byte
+	otherPeerPublicKey    []byte
+	resultCh              chan HolePunchResult
 }
 
 // struct that will be returned to start send chunks
@@ -50,7 +51,7 @@ func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDP
 	defaultConfig := getDefaultConfig()
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
-		peerLocalAddress: peerLocal, peerRemoteAddress: peerRemote,
+		peerLocalAddressIPV4: peerLocal, peerRemoteAddressIPV4: peerRemote,
 		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult)}
 	//goroutine - try to punch and listen for udp packets (async)
 	go punch.tryPunch()
@@ -64,8 +65,11 @@ func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDP
 func (punch *HolePuncher) tryPunch() {
 	// simple message PUNCH to enable NAT mapping
 	// this routine separates on 2 routines that will try to probe locally and stun
-	go punch.probe(punch.peerLocalAddress, punch.myPublicKey)
-	go punch.probe(punch.peerRemoteAddress, punch.myPublicKey)
+	go punch.probe(punch.peerLocalAddressIPV4, punch.myPublicKey)
+	go punch.probe(punch.peerRemoteAddressIPV4, punch.myPublicKey)
+	if punch.peerPublicAddressIPV6 != nil {
+		go punch.probe(punch.peerPublicAddressIPV6, punch.myPublicKey)
+	}
 
 }
 

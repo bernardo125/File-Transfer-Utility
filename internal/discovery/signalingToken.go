@@ -21,18 +21,19 @@ var DefaultSTUNServers = []string{
 var secret, _ = hex.DecodeString("6368616e676520746869732070617373776f726420746f206120736563726574")
 
 type connectionCandidates struct {
-	LocalAddress       *net.UDPAddr
-	StunPublicAddress  *net.UDPAddr
-	Ed25519PublicToken *ed25519.PublicKey
+	LocalAddressIPV4      *net.UDPAddr
+	PublicAddressIPV6     *net.UDPAddr
+	StunPublicAddressIPV4 *net.UDPAddr
+	Ed25519PublicToken    *ed25519.PublicKey
 }
 
 // Orchestrate encryptation and base64 codification
 func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
 	stunClient := Client{}
-	local_response := GetLocalUDPAddr(conn)
+	local_ipv4, public_ipv6 := GetMachineAddrs(conn)
 	stun_response, _ := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
 	public, priv := ed55519TokenGen()
-	connCandidates := connectionCandidates{LocalAddress: local_response, StunPublicAddress: stun_response, Ed25519PublicToken: &public}
+	connCandidates := connectionCandidates{LocalAddressIPV4: local_ipv4, PublicAddressIPV6: public_ipv6, StunPublicAddressIPV4: stun_response, Ed25519PublicToken: &public}
 	nonce, ciphertext := chacha20Encryct(secret, &connCandidates)
 	finalPacket := append(nonce, ciphertext...)
 	key = base64Enconding(finalPacket)
@@ -73,28 +74,38 @@ func chacha20Encryct(secret []byte, candidates_response *connectionCandidates) (
 		panic(err)
 	}
 
-	plaintext := encodeTo16bytes(candidates_response)
+	plaintext := encodeTo62bytes(candidates_response)
 	ciphertext = make([]byte, len(plaintext))
 	// Encrypt the plaintext
 	cipher.XORKeyStream(ciphertext, plaintext)
 	return nonce, ciphertext
 }
 
-func encodeTo16bytes(candidates_response *connectionCandidates) (encodedEndpoint []byte) {
+func encodeTo62bytes(candidates_response *connectionCandidates) (encodedEndpoint []byte) {
 	// encode connectionCandidates struct to byte buffer
-	// build 44 byte array with local and stun address to better compression
-	// ip = 4 bytes , port = 2 bytes, ed25519 token = 32 bytes (avoid spoofing and mitm)
-	response := make([]byte, 44)
-	// local address
-	copy(response[0:4], candidates_response.LocalAddress.IP.To4())
-	binary.BigEndian.PutUint16(response[4:6], uint16(candidates_response.LocalAddress.Port))
-
-	//stun remote
-	copy(response[6:10], candidates_response.StunPublicAddress.IP.To4())
-	binary.BigEndian.PutUint16(response[10:12], uint16(candidates_response.StunPublicAddress.Port))
+	// build 62 byte array with local and stun address to better compression
+	// ipv4 = 4 bytes , ipv6 = 16 bytes, port = 2 bytes, ed25519 token = 32 bytes (avoid spoofing and mitm)
+	var response []byte
+	// verify if ipv6 is present
+	if candidates_response.PublicAddressIPV6 != nil {
+		response = make([]byte, 62)
+		// public address ipv6
+		copy(response[44:62], candidates_response.PublicAddressIPV6.IP.To16())
+		binary.BigEndian.PutUint16(response[22:24], uint16(candidates_response.LocalAddressIPV4.Port))
+	} else {
+		response = make([]byte, 44)
+	}
 
 	//ed25519 token
-	copy(response[12:44], *candidates_response.Ed25519PublicToken)
+	copy(response[0:32], *candidates_response.Ed25519PublicToken)
+
+	// local address ipv4
+	copy(response[32:36], candidates_response.LocalAddressIPV4.IP.To4())
+	binary.BigEndian.PutUint16(response[36:38], uint16(candidates_response.LocalAddressIPV4.Port))
+
+	//stun remote ipv4
+	copy(response[38:42], candidates_response.StunPublicAddressIPV4.IP.To4())
+	binary.BigEndian.PutUint16(response[42:44], uint16(candidates_response.StunPublicAddressIPV4.Port))
 
 	return response
 }
@@ -115,8 +126,8 @@ func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal 
 	cipher.XORKeyStream(plaintext, ciphertext)
 
 	endpoint := decodeFrom16bytes(plaintext)
-	peerLocal = endpoint.LocalAddress
-	peerRemote = endpoint.StunPublicAddress
+	peerLocal = endpoint.LocalAddressIPV4
+	peerRemote = endpoint.StunPublicAddressIPV4
 	publickey = endpoint.Ed25519PublicToken
 
 	return peerLocal, peerRemote, publickey, nil
@@ -126,24 +137,38 @@ func decodeFrom16bytes(encodedText []byte) (decodedResponse *connectionCandidate
 	// decode byte buffer to connectionCandidates struct
 	// build 12byte array with local and stun address to better compression
 	// ip = 4 bytes , port = 2 bytes
-	// local address
-	localIP := make(net.IP, 4)
-	raw_localIP := binary.BigEndian.Uint32(encodedText[0:4])
-	binary.BigEndian.PutUint32(localIP, raw_localIP)
-	localPort := int(binary.BigEndian.Uint16(encodedText[4:6])) // int to net.UDPAddr struct
-	// stun remote address
-	remoteIP := make(net.IP, 4)
-	raw_remoteIP := binary.BigEndian.Uint32(encodedText[6:10])
-	binary.BigEndian.PutUint32(remoteIP, raw_remoteIP)
-	remotePort := int(binary.BigEndian.Uint16(encodedText[10:12]))
-
 	//public ed25519
-	publickey := ed25519.PublicKey(encodedText[12:44])
+	publickey := ed25519.PublicKey(encodedText[0:32])
 
-	localResponse := net.UDPAddr{IP: localIP, Port: localPort}
-	remoteResponse := net.UDPAddr{IP: remoteIP, Port: remotePort}
-	decodedResponse = &connectionCandidates{LocalAddress: &localResponse, StunPublicAddress: &remoteResponse, Ed25519PublicToken: &publickey}
+	// local address ipv4
+	localIPV4 := make(net.IP, 4)
+	raw_localIPV4 := binary.BigEndian.Uint32(encodedText[32:36])
+	binary.BigEndian.PutUint32(localIPV4, raw_localIPV4)
+	localPortIPV4 := int(binary.BigEndian.Uint16(encodedText[36:38])) // int to net.UDPAddr struct
+
+	// stun remote address ipv4
+	remoteIPV4 := make(net.IP, 4)
+	raw_remoteIPV4 := binary.BigEndian.Uint32(encodedText[38:42])
+	binary.BigEndian.PutUint32(remoteIPV4, raw_remoteIPV4)
+	remotePort := int(binary.BigEndian.Uint16(encodedText[42:44]))
+
+	localResponseIPV4 := net.UDPAddr{IP: localIPV4, Port: localPortIPV4}
+	remoteResponseIPV4 := net.UDPAddr{IP: remoteIPV4, Port: remotePort}
+	decodedResponse = &connectionCandidates{LocalAddressIPV4: &localResponseIPV4, PublicAddressIPV6: decodeIPV6IfExists(encodedText), StunPublicAddressIPV4: &remoteResponseIPV4, Ed25519PublicToken: &publickey}
 	return decodedResponse
+}
+
+func decodeIPV6IfExists(encodedText []byte) *net.UDPAddr {
+	// magic number
+	if len(encodedText) > 44 {
+		// public address ipv6
+		publicIPV6 := make(net.IP, 16)
+		raw_publicIPV6 := binary.BigEndian.Uint32(encodedText[44:60])
+		binary.BigEndian.PutUint32(publicIPV6, raw_publicIPV6)
+		publicPortIPV6 := int(binary.BigEndian.Uint16(encodedText[60:62])) // int to net.UDPAddr struct
+		return &net.UDPAddr{IP: publicIPV6, Port: publicPortIPV6}
+	}
+	return nil
 }
 
 func base64Decoding(b64token string) (decoded []byte) {

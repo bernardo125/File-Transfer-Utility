@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 
 	"ftu/internal/connectivity"
@@ -21,8 +22,7 @@ func Run() {
 	if option == "3" {
 		os.Exit(0)
 	}
-	localIP := discovery.GetLocalIP()
-	conn := transport.InitializeUDPSocket(localIP)
+	conn := transport.InitializeUDPSocket()
 	defer conn.Close()
 
 	myToken, myPrivKey := discovery.CreateKey(conn)
@@ -33,6 +33,7 @@ func Run() {
 
 	// A função GetPeer devolve peerLocal além do peerRemote e a chave pública
 	peerLocal, peerRemote, peerPubKey, err := discovery.GetPeer(peerToken)
+	fmt.Printf("PEER:\nLOCAL:%s : %d \nREMOTE:%s : %d\n", peerLocal.IP, peerLocal.Port, peerRemote.IP, peerRemote.Port)
 	if err != nil {
 		clierr.PrintConnectionError(err)
 		os.Exit(1)
