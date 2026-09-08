@@ -49,9 +49,9 @@ func ed55519TokenGen() (public ed25519.PublicKey, priv ed25519.PrivateKey) {
 	return public, priv
 }
 
-func GetPeer(key string) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
+func GetPeer(key string) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
 	if len(key) < 50 {
-		return nil, nil, nil, fmt.Errorf("That's not a token")
+		return nil, nil, nil, nil, fmt.Errorf("That's not a token")
 	}
 	decodedBytes := base64Decoding(key)
 	nonce := decodedBytes[:12] // nonce is 12 bytes
@@ -89,9 +89,10 @@ func encodeTo62bytes(candidates_response *connectionCandidates) (encodedEndpoint
 	// verify if ipv6 is present
 	if candidates_response.PublicAddressIPV6 != nil {
 		response = make([]byte, 62)
-		// public address ipv6
-		copy(response[44:62], candidates_response.PublicAddressIPV6.IP.To16())
-		binary.BigEndian.PutUint16(response[22:24], uint16(candidates_response.LocalAddressIPV4.Port))
+		// public address ipv6 (16 bytes: 44..60)
+		copy(response[44:60], candidates_response.PublicAddressIPV6.IP.To16())
+		// public address ipv6 port (2 bytes: 60..62)
+		binary.BigEndian.PutUint16(response[60:62], uint16(candidates_response.PublicAddressIPV6.Port))
 	} else {
 		response = make([]byte, 44)
 	}
@@ -115,10 +116,10 @@ func base64Enconding(data []byte) (b64token string) {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
-func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
+func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
 	cipher, err := chacha20.NewUnauthenticatedCipher(secret, nonce)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	plaintext := make([]byte, len(ciphertext))
@@ -126,11 +127,12 @@ func chacha20Decryct(secret []byte, nonce []byte, ciphertext []byte) (peerLocal 
 	cipher.XORKeyStream(plaintext, ciphertext)
 
 	endpoint := decodeFrom16bytes(plaintext)
-	peerLocal = endpoint.LocalAddressIPV4
-	peerRemote = endpoint.StunPublicAddressIPV4
+	peerLocalIPV4 = endpoint.LocalAddressIPV4
+	peerRemoteIPV4 = endpoint.StunPublicAddressIPV4
+	peerPublicIPV6 = endpoint.PublicAddressIPV6
 	publickey = endpoint.Ed25519PublicToken
 
-	return peerLocal, peerRemote, publickey, nil
+	return peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, publickey, nil
 }
 
 func decodeFrom16bytes(encodedText []byte) (decodedResponse *connectionCandidates) {
@@ -159,12 +161,10 @@ func decodeFrom16bytes(encodedText []byte) (decodedResponse *connectionCandidate
 }
 
 func decodeIPV6IfExists(encodedText []byte) *net.UDPAddr {
-	// magic number
-	if len(encodedText) > 44 {
-		// public address ipv6
+	if len(encodedText) >= 62 {
+		// public address ipv6 (16 bytes: 44..60)
 		publicIPV6 := make(net.IP, 16)
-		raw_publicIPV6 := binary.BigEndian.Uint32(encodedText[44:60])
-		binary.BigEndian.PutUint32(publicIPV6, raw_publicIPV6)
+		copy(publicIPV6, encodedText[44:60])
 		publicPortIPV6 := int(binary.BigEndian.Uint16(encodedText[60:62])) // int to net.UDPAddr struct
 		return &net.UDPAddr{IP: publicIPV6, Port: publicPortIPV6}
 	}

@@ -32,8 +32,21 @@ func Run() {
 	peerToken, err := input.AskPeerToken(reader)
 
 	// A função GetPeer devolve peerLocal além do peerRemote e a chave pública
-	peerLocal, peerRemote, peerPubKey, err := discovery.GetPeer(peerToken)
-	fmt.Printf("PEER:\nLOCAL:%s : %d \nREMOTE:%s : %d\n", peerLocal.IP, peerLocal.Port, peerRemote.IP, peerRemote.Port)
+	peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, peerPubKey, err := discovery.GetPeer(peerToken)
+	publicIP := ""
+	publicPort := 0
+
+	if peerPublicIPV6 != nil {
+		publicIP = peerPublicIPV6.IP.String()
+		publicPort = peerPublicIPV6.Port
+	}
+
+	fmt.Printf(
+		"PEER:\nLOCALIPV4:%s : %d\nREMOTEIPV4:%s : %d\nPUBLICIPV6:%s : %d\n",
+		peerLocalIPV4.IP, peerLocalIPV4.Port,
+		peerRemoteIPV4.IP, peerRemoteIPV4.Port,
+		publicIP, publicPort,
+	)
 	if err != nil {
 		clierr.PrintConnectionError(err)
 		os.Exit(1)
@@ -42,7 +55,7 @@ func Run() {
 	info.PrintExecutingHolePunch()
 
 	// Executa o Hole Punch usando o módulo connectivity
-	punchCh := connectivity.UDPHolePunch(conn, peerLocal, peerRemote, &myPrivKey, peerPubKey)
+	punchCh := connectivity.UDPHolePunch(conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, &myPrivKey, peerPubKey)
 	punchResult := <-punchCh // Aguarda a conclusão via channel
 
 	if punchResult.Err != nil {

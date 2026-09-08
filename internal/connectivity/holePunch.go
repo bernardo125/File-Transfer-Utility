@@ -47,11 +47,11 @@ func getDefaultConfig() (config HolePunchConfig) {
 	return HolePunchConfig{Timeout: 60 * time.Second, ProbeInterval: 300 * time.Millisecond, ListenInterval: 500 * time.Millisecond, MaxAttempts: 100}
 }
 
-func UDPHolePunch(conn *net.UDPConn, peerLocal *net.UDPAddr, peerRemote *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
+func UDPHolePunch(conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
 	defaultConfig := getDefaultConfig()
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
-		peerLocalAddressIPV4: peerLocal, peerRemoteAddressIPV4: peerRemote,
+		peerLocalAddressIPV4: peerLocalIPV4, peerRemoteAddressIPV4: peerRemoteIPV4, peerPublicAddressIPV6: peerPublicIPV6,
 		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult)}
 	//goroutine - try to punch and listen for udp packets (async)
 	go punch.tryPunch()
