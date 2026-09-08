@@ -52,7 +52,13 @@ func UDPHolePunch(conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
 		peerLocalAddressIPV4: peerLocalIPV4, peerRemoteAddressIPV4: peerRemoteIPV4, peerPublicAddressIPV6: peerPublicIPV6,
-		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult)}
+		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult, 1)}
+
+	// test if is the same address
+	if isMyOwnPC(&punch.myPublicKey, &punch.otherPeerPublicKey) {
+		punch.resultCh <- HolePunchResult{Addr: nil, Err: ErrSameAdress}
+		return punch.resultCh
+	}
 	//goroutine - try to punch and listen for udp packets (async)
 	go punch.tryPunch()
 	//when resultCh channel receive data or timeout this func will return the result to main app
@@ -103,12 +109,6 @@ func (punch *HolePuncher) listenPeer() {
 		// if error type is timeout, a null address will be returned to the channel
 		if err != nil && os.IsTimeout(err) {
 			punch.resultCh <- HolePunchResult{Addr: nil, Err: err}
-			return
-		}
-
-		// test if is the same address
-		if isMyOwnPC(&punch.myPublicKey, &punch.otherPeerPublicKey) {
-			punch.resultCh <- HolePunchResult{Addr: nil, Err: ErrSameAdress}
 			return
 		}
 

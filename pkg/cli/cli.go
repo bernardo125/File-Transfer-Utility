@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"ftu/internal/connectivity"
@@ -33,20 +32,7 @@ func Run() {
 
 	// A função GetPeer devolve peerLocal além do peerRemote e a chave pública
 	peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, peerPubKey, err := discovery.GetPeer(peerToken)
-	publicIP := ""
-	publicPort := 0
 
-	if peerPublicIPV6 != nil {
-		publicIP = peerPublicIPV6.IP.String()
-		publicPort = peerPublicIPV6.Port
-	}
-
-	fmt.Printf(
-		"PEER:\nLOCALIPV4:%s : %d\nREMOTEIPV4:%s : %d\nPUBLICIPV6:%s : %d\n",
-		peerLocalIPV4.IP, peerLocalIPV4.Port,
-		peerRemoteIPV4.IP, peerRemoteIPV4.Port,
-		publicIP, publicPort,
-	)
 	if err != nil {
 		clierr.PrintConnectionError(err)
 		os.Exit(1)
