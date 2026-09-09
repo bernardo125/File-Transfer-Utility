@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Consolas", "Fira Code", "Courier New", monospace;
+  
+  /* Default: Dark Gray Mode (µTorrent desktop inspired) */
+  --bg-app: #1e1e20;
+  --bg-panel: #252528;
+  --bg-panel-hover: #2c2c31;
+  --bg-inset: #18181a;
+  --border-app: #38383e;
+  --border-subtle: #2b2b30;
+  --border-highlight: #4a4a52;
+  --text-main: #f0f0f2;
+  --text-muted: #9c9ca4;
+  --text-dim: #6e6e78;
+  
+  /* Iconic µTorrent Green */
+  --green-utorrent: #2fa340;
+  --green-utorrent-hover: #288d37;
+  --green-utorrent-active: #1f752c;
+  --green-utorrent-border: #278535;
+  --green-utorrent-light: rgba(47, 163, 64, 0.15);
+  
+  /* Status Colors */
+  --status-ok: #2fa340;
+  --status-warn: #eab308;
+  --status-err: #ef4444;
+}
+
+html.light {
+  /* Classic Desktop Light Gray Mode */
+  --bg-app: #edeef2;
+  --bg-panel: #ffffff;
+  --bg-panel-hover: #f3f4f6;
+  --bg-inset: #f8f9fa;
+  --border-app: #cfd2d8;
+  --border-subtle: #e2e4e8;
+  --border-highlight: #b0b4be;
+  --text-main: #18181b;
+  --text-muted: #52525b;
+  --text-dim: #8b8e98;
+  
+  --green-utorrent: #2fa340;
+  --green-utorrent-hover: #288d37;
+  --green-utorrent-active: #1f752c;
+  --green-utorrent-border: #278535;
+  --green-utorrent-light: rgba(47, 163, 64, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Wails Desktop Window Drag Regions */
+.window-drag-region {
+  --wails-draggable: drag;
+  -webkit-app-region: drag;
+}
+
+.window-no-drag {
+  --wails-draggable: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+/* Monospace text */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Desktop Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-inset);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-app);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-highlight);
+}
+
+/* 360-degree rotation animation with exact 2s duration (Pairing Screen) */
+@keyframes spin-clockwise-2s {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-rotate-2s {
+  animation: spin-clockwise-2s 2s linear infinite;
+}
+
