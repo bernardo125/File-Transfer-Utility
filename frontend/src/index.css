@@ -1,8 +1,25 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Reddit Sans';
+  src: url('./assets/Reddit_Sans/RedditSans-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Reddit Sans';
+  src: url('./assets/Reddit_Sans/RedditSans-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+
 :root {
-  --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "Consolas", "Fira Code", "Courier New", monospace;
+  --font-sans: 'Reddit Sans', -apple-system, BlinkMacSystemFont, Roboto, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Consolas', 'Fira Code', 'Courier New', monospace;
   
   /* Default: Dark Gray Mode (µTorrent desktop inspired) */
   --bg-app: #1e1e20;
