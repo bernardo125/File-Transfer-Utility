@@ -51,7 +51,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
   const activeFileSize = selectedFile?.size || incomingTransfer?.fileSize || transferCompleted?.fileSize || 0;
 
   return (
-    <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full select-none bg-[var(--bg-app)] text-[var(--text-main)] justify-center font-mono">
+    <div className="flex-1 flex flex-col justify-center p-6 max-w-4xl mx-auto w-full font-mono">
       {/* Top Bar with Session Status */}
       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
         <button type="button" onClick={handleAbort}
@@ -88,7 +88,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
             </div>
           ) : isWaitingApproval && selectedFile ? (
             <div className="w-full max-w-md p-5 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] flex flex-col items-center gap-3 text-center shadow-xs">
-              <div className="flex items-center gap-2 text-xs text-[var(--text-main)] font-semibold">
+              <div className="flex items-center gap-2 text-xs font-semibold">
                 <FileText className="w-4 h-4 text-[#2fa340]" /><span className="truncate">{selectedFile.name} ({formatBytes(selectedFile.size)})</span>
               </div>
               <div className="flex items-center gap-2 text-xs text-[#2fa340] animate-pulse">
@@ -115,7 +115,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
                 <FileText className="w-4 h-4" />
               </div>
               <div className="truncate flex-1">
-                <p className="text-xs font-bold text-[var(--text-main)] truncate">{incomingTransfer.fileName}</p>
+                <p className="text-xs font-bold truncate">{incomingTransfer.fileName}</p>
                 <p className="text-[10px] text-[var(--text-dim)]">{formatBytes(incomingTransfer.fileSize)}</p>
               </div>
             </div>
@@ -133,7 +133,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
         ) : (
           <div className="flex flex-col items-center gap-2 text-center p-6 border border-dashed border-[var(--border-app)] rounded-[4px] bg-[var(--bg-panel)] w-full max-w-md">
             <Loader2 className="w-5 h-5 text-[#2fa340] animate-spin mb-1" />
-            <p className="text-xs text-[var(--text-main)] font-semibold">A aguardar a escolha do ficheiro pelo par remoto...</p>
+            <p className="text-xs font-semibold">A aguardar a escolha do ficheiro pelo par remoto...</p>
             <p className="text-[10px] text-[var(--text-dim)]">O remetente selecionará o ficheiro para envio</p>
           </div>
         )}

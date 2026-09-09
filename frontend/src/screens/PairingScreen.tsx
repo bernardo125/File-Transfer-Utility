@@ -70,31 +70,29 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
 
 
   return (
-    <div className="flex-1 flex flex-col p-6 max-w-4xl mx-auto w-full select-none bg-[var(--bg-app)] text-[var(--text-main)] justify-center">
+    <div className="flex-1 flex flex-col justify-center p-6 max-w-4xl  w-full">
       {/* Navigation & Mode Toggle */}
-      <div className="flex border-b border-[var(--border-subtle)] ">
+      <div className=" absolute top-1 border-b border-[var(--border-subtle)]">
         <button type="button" disabled={isConnecting} onClick={onBack}
-          className="h-7 px-2.5 rounded-[2px] bg-[var(--bg-panel)] hover:bg-[var(--bg-panel-hover)] disabled:opacity-40 border border-[var(--border-app)] text-xs  -mono flex items-center gap-1.5 cursor-pointer">
-          <ArrowLeft className="w-3.5 h-3.5" /><span>Back</span>
+          className="h-7 px-2.5 rounded-[2px] bg-[var(--bg-panel)] hover:bg-[var(--bg-panel-hover)] disabled:opacity-40 border border-[var(--border-app)] text-xs flex items-center gap-1.5 cursor-pointer">
+          <ArrowLeft className="w-4.5 h-4.5" /><span>Back</span>
         </button>
-
       </div>
 
       {/* Two-Column Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+      <div className="grid md:grid-cols-2 gap-8 items-center">
         {/* Left: Graphic Placeholder (continuous 2s 360-deg rotation during connection) */}
         <div className="flex flex-col items-center justify-center p-4">
           <div className={`w-44 h-44 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] flex flex-col items-center justify-center ${isConnecting ? 'animate-rotate-2s' : ''}`}>
-            <div className="w-16 h-16 rounded-[3px] bg-[var(--bg-inset)] border border-[var(--border-subtle)] flex flex-col items-center justify-center text-[#2fa340]">
-            </div>
-            <span className="text-[9px]  -mono text-[var(--text-dim)] uppercase mt-2">[Placeholder]</span>
+            <div className="w-16 h-16 rounded-[3px] bg-[var(--bg-inset)] border border-[var(--border-subtle)]" />
+            <span className="text-[9px] text-[var(--text-dim)] uppercase mt-2">[Placeholder]</span>
           </div>
         </div>
 
         {/* Right: State A (Tokens) or State B (Connecting) */}
         <div>
           {error && (
-            <div className="mb-3 p-2.5 rounded-[3px] bg-rose-950/40 border border-rose-800/60 text-rose-200 text-xs flex items-center justify-between  -mono">
+            <div className="mb-3 p-2.5 rounded-[3px] bg-rose-950/40 border border-rose-800/60 text-rose-200 text-xs flex items-center justify-between">
               <div className="flex items-center gap-2 truncate">
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" /><span className="truncate">{error}</span>
               </div>
@@ -105,14 +103,14 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
           {!isConnecting ? (
             <div className="bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] p-4 space-y-3 shadow-xs">
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[11px]  -mono text-[var(--text-muted)] uppercase  -semibold">O Teu Token</span>
+                <div className="mb-1">
+                  <span className="text-[11px] text-[var(--text-muted)] uppercase">O Teu Token</span>
                 </div>
-                <div className="bg-[var(--bg-inset)] border border-[var(--border-app)] rounded-[3px] p-2  -mono text-xs break-all select-all min-h-[44px] max-h-16 overflow-y-auto">
+                <div className="bg-[var(--bg-inset)] border border-[var(--border-app)] rounded-[3px] p-2 text-xs break-all select-all min-h-[44px] max-h-16 overflow-y-auto">
                   {isLoadingToken ? 'A obter token STUN...' : localToken || 'Nenhum token'}
                 </div>
                 <button type="button" disabled={isLoadingToken || !localToken} onClick={handleCopy}
-                  className="mt-1.5 h-6 px-2.5 rounded-[2px] bg-[var(--bg-panel-hover)] hover:bg-[var(--border-app)] disabled:opacity-40 text-[11px]  -mono border border-[var(--border-subtle)] flex items-center gap-1 cursor-pointer">
+                  className="mt-1.5 h-6 px-2.5 rounded-[2px] bg-[var(--bg-panel-hover)] hover:bg-[var(--border-app)] disabled:opacity-40 text-[11px] border border-[var(--border-subtle)] flex items-center gap-1 cursor-pointer">
                   {isCopied ? <Check className="w-3 h-3 text-[#2fa340]" /> : <Copy className="w-3 h-3 text-[var(--text-muted)]" />}
                   <span>{isCopied ? 'Copiado!' : 'Copiar Token'}</span>
                 </button>
@@ -121,24 +119,24 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
               <div>
                 <textarea value={remoteToken} onChange={(e) => setRemoteToken(e.target.value)}
                   placeholder="Cole aqui o token recebido do seu contacto..." rows={2}
-                  className="w-full bg-[var(--bg-inset)] border border-[var(--border-app)] focus:border-[#2fa340] rounded-[3px] p-2  -mono text-xs focus:outline-none resize-none transition-colors" />
+                  className="w-full bg-[var(--bg-inset)] border border-[var(--border-app)] focus:border-[#2fa340] rounded-[3px] p-2 text-xs focus:outline-none resize-none transition-colors" />
               </div>
 
               <div className="flex justify-end pt-1">
                 <button type="button" disabled={isLoadingToken || !remoteToken.trim()} onClick={handleConnect}
-                  className="h-8 px-5 rounded-[3px] bg-[#2fa340] hover:bg-[#288d37] active:bg-[#1f752c] disabled:opacity-40 text-white  -semibold text-xs uppercase  -mono tracking-wider flex items-center gap-1.5 cursor-pointer">
+                  className="h-8 px-5 rounded-[3px] bg-[#2fa340] hover:bg-[#288d37] active:bg-[#1f752c] disabled:opacity-40 text-white text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
                   <Link className="w-3 h-3" /><span>Connect</span>
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] p-6 flex flex-col items-center justify-center space-y-4 shadow-xs text-center">
-              <div className="p-3 px-6 rounded-[3px] bg-[var(--bg-inset)] border border-[var(--border-subtle)] flex flex-col items-center">
-                <span className="text-[10px]  -mono text-[var(--text-dim)] flex items-center gap-1 mb-0.5"><Clock className="w-3 h-3 text-[#2fa340]" />TIMEOUT</span>
-                <span className="text-4xl  -mono  -bold text-[#2fa340] tracking-widest">00:{countdown < 10 ? `0${countdown}` : countdown}</span>
+            <div className="bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] p-6 flex flex-col items-center space-y-4 shadow-xs text-center">
+              <div className="py-3 px-6 rounded-[3px] bg-[var(--bg-inset)] border border-[var(--border-subtle)] flex flex-col items-center">
+                <span className="text-[10px] text-[var(--text-dim)] flex items-center gap-1 mb-0.5"><Clock className="w-3 h-3 text-[#2fa340]" />TIMEOUT</span>
+                <span className="text-4xl text-[#2fa340] tracking-widest">00:{countdown < 10 ? `0${countdown}` : countdown}</span>
               </div>
               <button type="button" onClick={handleCancel}
-                className="h-8 px-6 rounded-[3px] bg-[var(--bg-inset)] hover:text-rose-400 hover:border-rose-800/60 border border-[var(--border-app)] text-xs  -mono uppercase cursor-pointer flex items-center gap-1.5">
+                className="h-8 px-6 rounded-[3px] bg-[var(--bg-inset)] hover:text-rose-400 hover:border-rose-800/60 border border-[var(--border-app)] text-xs uppercase cursor-pointer flex items-center gap-1.5">
                 <X className="w-3.5 h-3.5" /><span>Cancel</span>
               </button>
             </div>
