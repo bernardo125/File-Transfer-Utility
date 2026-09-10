@@ -37,7 +37,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
   useEffect(() => {
     if (!isConnecting) return;
     if (connectionSuccess) { stopTimer(); setIsConnecting(false);onConnected(mode); }
-    else if (connectionFailed) { stopTimer(); setIsConnecting(false); setError(connectionFailed.reason || 'Falha de conexão'); }
+    else if (connectionFailed) { stopTimer(); setIsConnecting(false); setError(connectionFailed.reason || 'Connection failure'); }
   }, [connectionSuccess, connectionFailed, isConnecting, stopTimer, onConnected,]);
 
   const handleCopy = async () => {
@@ -53,7 +53,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
     timerRef.current = window.setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          stopTimer(); setIsConnecting(false); setError('Tempo limite excedido. Não foi possível conectar ao par.');
+          stopTimer(); setIsConnecting(false); setError('Time limit exceeded. Could not connect to the peer.');
           CancelConnection().catch(() => {});
           return 0;
         }
@@ -61,7 +61,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
       });
     }, 1000);
     try { await ConnectPeer(trimmed); }
-    catch (err) { stopTimer(); setIsConnecting(false); setError(`Erro ao conectar: ${err instanceof Error ? err.message : String(err)}`); }
+    catch (err) { stopTimer(); setIsConnecting(false); setError(`Connect error: ${err instanceof Error ? err.message : String(err)}`); }
   };
 
   const handleCancel = () => {
@@ -104,21 +104,21 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
             <div className="bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] p-4 space-y-3 shadow-xs">
               <div>
                 <div className="mb-1">
-                  <span className="text-[11px] text-[var(--text-muted)] uppercase">O Teu Token</span>
+                  <span className="text-[11px] text-[var(--text-muted)] uppercase">Your token</span>
                 </div>
                 <div className="bg-[var(--bg-inset)] border border-[var(--border-app)] rounded-[3px] p-2 text-xs break-all select-all min-h-[44px] max-h-16 overflow-y-auto">
-                  {isLoadingToken ? 'A obter token STUN...' : localToken || 'Nenhum token'}
+                  {isLoadingToken ? 'Getting token...' : localToken || 'None'}
                 </div>
                 <button type="button" disabled={isLoadingToken || !localToken} onClick={handleCopy}
                   className="mt-1.5 h-6 px-2.5 rounded-[2px] bg-[var(--bg-panel-hover)] hover:bg-[var(--border-app)] disabled:opacity-40 text-[11px] border border-[var(--border-subtle)] flex items-center gap-1 cursor-pointer">
                   {isCopied ? <Check className="w-3 h-3 text-[#2fa340]" /> : <Copy className="w-3 h-3 text-[var(--text-muted)]" />}
-                  <span>{isCopied ? 'Copiado!' : 'Copiar Token'}</span>
+                  <span>{isCopied ? 'Copied!' : 'Copy Token'}</span>
                 </button>
               </div>
 
               <div>
                 <textarea value={remoteToken} onChange={(e) => setRemoteToken(e.target.value)}
-                  placeholder="Cole aqui o token recebido do seu contacto..." rows={2}
+                  placeholder="Paste your friend's token here..." rows={2}
                   className="w-full bg-[var(--bg-inset)] border border-[var(--border-app)] focus:border-[#2fa340] rounded-[3px] p-2 text-xs focus:outline-none resize-none transition-colors" />
               </div>
 

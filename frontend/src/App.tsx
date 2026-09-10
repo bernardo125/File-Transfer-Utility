@@ -18,9 +18,9 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[var(--bg-app)] text-[var(--text-main)] select-none overflow-hidden font-sans transition-colors duration-150 relative">
+    <div className="w-full h-screen flex flex-col relative overflow-hidden">
       {/* Github and Theme Switcher Buttons */}
-      <div className="absolute bottom-3 left-3 z-[9999] flex gap-4 p-4">
+      <div className="absolute bottom-3 left-1 flex gap-3 ">
         <GitHubButton />
         <ThemeSwitcher theme={theme} onClick={toggleTheme}/>
       </div>

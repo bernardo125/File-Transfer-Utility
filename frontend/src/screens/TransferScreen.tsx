@@ -51,7 +51,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
   const activeFileSize = selectedFile?.size || incomingTransfer?.fileSize || transferCompleted?.fileSize || 0;
 
   return (
-    <div className="flex-1 flex flex-col justify-center p-6 max-w-4xl mx-auto w-full">
+    <div className="flex-1 flex flex-col justify-center py-6 mx-auto w-full">
       {/* Top Bar with Session Status */}
       <div className="absolute top-1 items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
         <button type="button" onClick={handleAbort}
@@ -64,7 +64,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
       <NetworkTopology role={role} />
 
       {/* Dynamic Central Area */}
-      <div className="min-h-[200px] w-full flex flex-col items-center justify-center px-4">
+      <div className="min-h-[200px] w-full flex flex-col items-center justify-center">
         {isTransferActive ? (
           <ProgressPanel fileName={activeFileName} fileSize={activeFileSize} progress={transferProgress}
             completed={transferCompleted} isReceiver={!isSender} onAbort={handleAbort}
@@ -76,7 +76,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
               <div className="flex items-center gap-2 truncate">
                 <FileText className="w-4 h-4 text-zinc-500" /><span className="text-xs truncate">{selectedFile?.name}</span>
               </div>
-              <span className="text-xs  uppercase text-zinc-400">Cancelado</span>
+              <span className="text-xs  uppercase text-zinc-400">Cancelled</span>
             </div>
           ) : isWaitingApproval && selectedFile ? (
             <div className="w-full max-w-md p-5 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] flex flex-col items-center gap-3 text-center shadow-xs">
@@ -84,7 +84,7 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
                 <FileText className="w-4 h-4 text-[#2fa340]" /><span className="truncate">{selectedFile.name} ({formatBytes(selectedFile.size)})</span>
               </div>
               <div className="flex items-center gap-2 text-xs text-[#2fa340] animate-pulse">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /><span>A aguardar confirmação do destinatário...</span>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Waiting for receiver confimation...</span>
               </div>
             </div>
           ) : (
@@ -99,8 +99,8 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
         ) : incomingTransfer ? (
           <div className="w-full max-w-md p-5 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
-              <span className="text-xs text-[var(--text-muted)] uppercase">Proposta de Ficheiro</span>
-              <span className="text-[10px] text-[#2fa340] ">Aguardando Decisão</span>
+              <span className="text-xs text-[var(--text-muted)] uppercase">You want to receive:</span>
+              <span className="text-[10px] text-[#2fa340] ">Waiting for your response</span>
             </div>
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-[3px] bg-[var(--bg-inset)] border border-[var(--border-subtle)] flex items-center justify-center text-[#2fa340]">
@@ -125,15 +125,15 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
         ) : (
           <div className="flex flex-col items-center gap-2 text-center p-6 border border-dashed border-[var(--border-app)] rounded-[4px] bg-[var(--bg-panel)] w-full max-w-md">
             <Loader2 className="w-5 h-5 text-[#2fa340] animate-spin mb-1" />
-            <p className="text-xs font-semibold">A aguardar a escolha do ficheiro pelo par remoto...</p>
-            <p className="text-[10px] text-[var(--text-dim)]">O remetente selecionará o ficheiro para envio</p>
+            <p className="text-xs font-semibold">Waiting for sender choose a file to send...</p>
+            <p className="text-[10px] text-[var(--text-dim)]">The sender will select a file to share</p>
           </div>
         )}
       </div>
 
       {transferError && (
         <div className="mt-4 p-2 rounded-[2px] bg-rose-950/40 border border-rose-800/60 text-rose-300 text-[11px] text-center">
-          {transferError.message || 'Erro na transferência'}
+          {transferError.message || 'Tranfer error'}
         </div>
       )}
     </div>

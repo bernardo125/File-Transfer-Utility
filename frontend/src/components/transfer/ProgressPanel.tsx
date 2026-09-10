@@ -13,22 +13,14 @@ interface ProgressPanelProps {
   onOpenFolder?: (path: string) => void;
 }
 
-export const ProgressPanel: React.FC<ProgressPanelProps> = ({
-  fileName,
-  fileSize,
-  progress,
-  completed,
-  isReceiver,
-  onAbort,
-  onOpenFolder,
-}) => {
+export const ProgressPanel: React.FC<ProgressPanelProps> = ({fileName,fileSize,progress,completed,isReceiver,onAbort,onOpenFolder}) => {
   const percent = completed ? 100 : Math.min(100, Math.max(0, Math.round(progress?.percentage || 0)));
   const transferred = completed ? fileSize : (progress?.bytesTransferred || 0);
   const speed = completed ? completed.speedMBs : (progress?.speedMBs || 0);
   const eta = completed ? 0 : (progress?.etaSeconds || 0);
 
   return (
-    <div className="w-full bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] p-4 shadow-sm space-y-3">
+    <div className="w-full bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] px-5 py-4 space-y-3 shadow-sm">
       {/* File Info Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5 truncate">
@@ -62,7 +54,7 @@ export const ProgressPanel: React.FC<ProgressPanelProps> = ({
       </div>
 
       {/* Speed, ETA & Actions Footer */}
-      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--border-subtle)] text-[var(--text-muted)]">
+      <div className="flex items-center justify-between text-[11px] pt-2 border-t border-[var(--border-subtle)] text-[var(--text-muted)]">
         <div className="flex items-center gap-4">
           <span>Vel: <strong className="text-[var(--text-main)]">{speed.toFixed(1)} MB/s</strong></span>
           <span>ETA: <strong className="text-[var(--text-main)]">{completed ? '00:00:00' : formatEta(eta)}</strong></span>
