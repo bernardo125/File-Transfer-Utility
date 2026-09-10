@@ -70,7 +70,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
 
 
   return (
-    <div className="flex-1 flex flex-col justify-center p-6 max-w-4xl  w-full">
+    <div className="flex-1 flex flex-col justify-center p-6  w-full">
       {/* Navigation & Mode Toggle */}
       <div className=" absolute top-1 border-b border-[var(--border-subtle)]">
         <button type="button" disabled={isConnecting} onClick={onBack}
@@ -80,12 +80,10 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
       </div>
 
       {/* Two-Column Layout */}
-      <div className="grid md:grid-cols-2 gap-8 items-center">
-        {/* Left: Graphic Placeholder (continuous 2s 360-deg rotation during connection) */}
-        <div className="flex flex-col items-center justify-center p-4">
-          <div className={`w-44 h-44 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] flex flex-col items-center justify-center ${isConnecting ? 'animate-rotate-2s' : ''}`}>
-            <div className="w-16 h-16 rounded-[3px] bg-[var(--bg-inset)] border border-[var(--border-subtle)]" />
-            <span className="text-[9px] text-[var(--text-dim)] uppercase mt-2">[Placeholder]</span>
+      <div className="grid md:grid-cols-2 gap-2 items-center">
+          {/* Left: Graphic Placeholder (continuous 2s 360-deg rotation during connection) */}
+          <div className="flex flex-col items-center justify-center p-4">
+            <div className={`w-44 h-44 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] flex flex-col items-center justify-center ${isConnecting ? 'animate-rotate-2s' : ''}`}>
           </div>
         </div>
 
