@@ -53,10 +53,10 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
   return (
     <div className="flex-1 flex flex-col justify-center p-6 max-w-4xl mx-auto w-full">
       {/* Top Bar with Session Status */}
-      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
+      <div className="absolute top-1 items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-4">
         <button type="button" onClick={handleAbort}
           className="h-7 px-2.5 rounded-[2px] bg-[var(--bg-panel)] hover:bg-[var(--bg-panel-hover)] border border-[var(--border-app)] text-xs flex items-center gap-1.5 cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-main)]">
-          <ArrowLeft className="w-3.5 h-3.5" /><span>Sair da Sessão</span>
+          <ArrowLeft className="w-3.5 h-3.5" /><span>Close Connection</span>
         </button>
       </div>
 
@@ -64,15 +64,10 @@ export const TransferScreen: React.FC<TransferScreenProps> = ({ role, onBack }) 
       <NetworkTopology role={role} />
 
       {/* Dynamic Central Area */}
-      <div className="min-h-[200px] flex flex-col items-center justify-center">
+      <div className="min-h-[200px] w-full flex flex-col items-center justify-center px-4">
         {isTransferActive ? (
-          <ProgressPanel
-            fileName={activeFileName}
-            fileSize={activeFileSize}
-            progress={transferProgress}
-            completed={transferCompleted}
-            isReceiver={!isSender}
-            onAbort={handleAbort}
+          <ProgressPanel fileName={activeFileName} fileSize={activeFileSize} progress={transferProgress}
+            completed={transferCompleted} isReceiver={!isSender} onAbort={handleAbort}
             onOpenFolder={(path) => OpenFolder(path).catch(() => {})}
           />
         ) : isSender ? (
