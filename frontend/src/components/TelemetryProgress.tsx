@@ -70,13 +70,13 @@ export const TelemetryProgress: React.FC<TelemetryProgressProps> = ({
 
         <div className="text-right">
           {hasFineGrained ? (
-            <span className="text-xl font-bold font-mono text-cyan-400">{percentage}%</span>
+            <span className="text-xl font-bold  text-cyan-400">{percentage}%</span>
           ) : status === 'completed' ? (
             <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400">
               <CheckCircle2 className="w-4 h-4" /> 100%
             </span>
           ) : (
-            <span className="text-xs font-mono text-cyan-400 animate-pulse">Ativo</span>
+            <span className="text-xs  text-cyan-400 animate-pulse">Ativo</span>
           )}
         </div>
       </div>
@@ -104,7 +104,7 @@ export const TelemetryProgress: React.FC<TelemetryProgressProps> = ({
           </div>
           <div>
             <span className="text-[11px] text-slate-500 block uppercase font-medium">Velocidade</span>
-            <span className="text-xs font-mono font-semibold text-slate-200">
+            <span className="text-xs  font-semibold text-slate-200">
               {speed > 0 ? `${speed.toFixed(2)} MB/s` : '-- MB/s'}
             </span>
           </div>
@@ -119,7 +119,7 @@ export const TelemetryProgress: React.FC<TelemetryProgressProps> = ({
             <span className="text-[11px] text-slate-500 block uppercase font-medium">
               {eta > 0 ? 'Tempo Restante' : 'Decorrido'}
             </span>
-            <span className="text-xs font-mono font-semibold text-slate-200">
+            <span className="text-xs  font-semibold text-slate-200">
               {eta > 0 ? `${eta}s` : `${elapsed}s`}
             </span>
           </div>
@@ -132,7 +132,7 @@ export const TelemetryProgress: React.FC<TelemetryProgressProps> = ({
           </div>
           <div>
             <span className="text-[11px] text-slate-500 block uppercase font-medium">Volume</span>
-            <span className="text-xs font-mono font-semibold text-slate-200 truncate block">
+            <span className="text-xs  font-semibold text-slate-200 truncate block">
               {totalSize ? formatBytes(totalSize) : '--'}
             </span>
           </div>

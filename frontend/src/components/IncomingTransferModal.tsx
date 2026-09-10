@@ -61,7 +61,7 @@ export const IncomingTransferModal: React.FC<IncomingTransferModalProps> = ({ in
         {incoming.fileHash && (
           <div className="mb-5 bg-slate-950/40 px-3 py-2 rounded-lg border border-slate-800/60">
             <span className="text-[11px] text-slate-500 block mb-0.5">SHA-256 Esperado:</span>
-            <span className="text-xs font-mono text-slate-400 break-all select-all">{incoming.fileHash}</span>
+            <span className="text-xs  text-slate-400 break-all select-all">{incoming.fileHash}</span>
           </div>
         )}
 
