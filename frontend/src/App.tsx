@@ -20,7 +20,7 @@ const AppContent: React.FC = () => {
   return (
     <div className="w-full h-screen flex flex-col relative overflow-hidden">
       {/* Github and Theme Switcher Buttons */}
-      <div className="absolute bottom-3 left-1 flex gap-3 ">
+      <div className="absolute bottom-3 z-[9999] left-1 flex gap-3 ">
         <GitHubButton />
         <ThemeSwitcher theme={theme} onClick={toggleTheme}/>
       </div>

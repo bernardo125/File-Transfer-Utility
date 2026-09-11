@@ -20,9 +20,7 @@ export const GitHubButton: React.FC = () => {
 
   return (
     <div className="inline-flex items-center">
-      <button
-        type="button"
-        onClick={handleClick}
+      <button type="button" onClick={handleClick}
         className="h-10  px-10 rounded-[20px] bg-[var(--bg-panel)] hover:bg-[var(--bg-panel-hover)] active:bg-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-app)] transition-colors cursor-pointer flex items-center gap-1.5 text-[11px]"
       >
         <svg
