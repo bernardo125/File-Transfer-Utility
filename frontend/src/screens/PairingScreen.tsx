@@ -3,6 +3,7 @@ import { GetLocalToken, ConnectPeer, CancelConnection, CopyToClipboard } from '.
 import { useWailsEvents } from '../hooks/useWailsEvents';
 import type { PairingMode } from '../types/navigation';
 import { ArrowLeft, Copy, Check, Clock, Link, X, AlertTriangle } from 'lucide-react';
+import pairing_logo from '../assets/photos/magpie-pairing.png'
 
 interface PairingScreenProps {
   initialMode: PairingMode;
@@ -83,9 +84,8 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack
       <div className="grid md:grid-cols-2 gap-2 items-center">
           {/* Left: Graphic Placeholder (continuous 2s 360-deg rotation during connection) */}
           <div className="flex flex-col items-center justify-center p-4">
-            <div className={`w-44 h-44 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] flex flex-col items-center justify-center ${isConnecting ? 'animate-rotate-2s' : ''}`}>
+            <img src={pairing_logo} alt="Logo" className={`w-80 h-80 flex flex-col items-center justify-center ${isConnecting ? 'animate-rotate-2s' : ''}`}/>
           </div>
-        </div>
 
         {/* Right: State A (Tokens) or State B (Connecting) */}
         <div>

@@ -1,10 +1,11 @@
 import React from 'react';
+import logo from '../../assets/photos/magpie.png';
 
 export const LogoPlaceholder: React.FC = () => {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 select-none">
-      <div className="relative w-24 h-24 rounded-[4px] bg-[var(--bg-panel)] border border-[var(--border-app)] shadow-sm flex flex-col items-center justify-center group transition-all">
-    
+    <div className="flex flex-col items-center justify-center select-none">
+      <div className="relative w-70 h-70 flex  items-center">
+        <img src={logo} alt="Logo" />
       </div>
 
       {/* Software Title & Version */}
