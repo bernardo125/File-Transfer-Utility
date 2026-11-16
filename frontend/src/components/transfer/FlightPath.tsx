@@ -11,9 +11,9 @@ import { FlappingBird, type FlapSpeed } from '../ui/FlappingBird';
 
 const VIEW_W = 600;
 const VIEW_H = 190;
-const P0 = { x: 118, y: 120 }; // sender edge
+const P0 = { x: 132, y: 120 }; // sender edge
 const P1 = { x: 300, y: 18 }; // arc control point
-const P2 = { x: 482, y: 120 }; // receiver edge
+const P2 = { x: 468, y: 120 }; // receiver edge
 const ARC = `M ${P0.x} ${P0.y} Q ${P1.x} ${P1.y} ${P2.x} ${P2.y}`;
 const NODE_X = { sender: 70, receiver: 530 };
 const NODE_Y = 120;
