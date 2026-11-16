@@ -1,10 +1,11 @@
 import { Check, Laptop, ShieldCheck, X } from 'lucide-react';
 import type { TransferPhase } from '../../types/transfer';
 import type { PeerRole } from '../../types/navigation';
+import { FlappingBird, type FlapSpeed } from '../ui/FlappingBird';
 
 /*
- * The signature FTU visual: a paper plane flying from the sender's machine to the receiver's.
- * The plane's position on the arc IS the real transfer progress — it only moves when the
+ * The signature FTU visual: the magpie flying from the sender's machine to the receiver's.
+ * The bird's position on the arc IS the real transfer progress — it only moves when the
  * backend reports bytes moving, and parks/lands according to the actual phase.
  */
 
@@ -122,6 +123,8 @@ export function FlightPath({ role, phase, fraction }: FlightPathProps) {
   const color = TONE_COLOR[v.tone];
   const plane = pointOnArc(v.t);
   const moving = phase === 'transferring' && fraction !== null;
+  // Wings beat only while something real is happening: fast with bytes flowing, slow while waiting on the peer.
+  const flap: FlapSpeed = moving ? 'fast' : phase === 'preparing' || phase === 'awaiting' || phase === 'deciding' || phase === 'transferring' || phase === 'verifying' ? 'slow' : 'off';
 
   return (
     <div className="relative mx-auto w-full max-w-[min(600px,76vh)]" style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }} aria-hidden>
@@ -148,21 +151,22 @@ export function FlightPath({ role, phase, fraction }: FlightPathProps) {
           strokeDashoffset={1 - v.t}
           style={{ transition: `stroke-dashoffset ${moving ? '160ms linear' : '600ms ease-out'}, stroke 300ms` }}
         />
-        {/* Paper plane */}
-        <g
-          style={{
-            transform: `translate(${plane.x}px, ${plane.y}px) rotate(${plane.angle}deg) scale(${v.landed ? 0.3 : 1})`,
-            transition: `transform ${moving ? '160ms linear' : '600ms cubic-bezier(.3,.7,.4,1)'}, opacity 300ms`,
-            opacity: v.landed ? 0 : 1,
-          }}
-        >
-          <g className={v.hovering ? 'anim-hover' : undefined}>
-            <path d="M16 0 L-12 -11 L-5 0 Z" fill={color} />
-            <path d="M16 0 L-5 0 L-12 11 Z" fill={color} opacity="0.65" />
-            <path d="M16 0 L-5 0 L-8 6 Z" fill="var(--c-bg)" opacity="0.35" />
-          </g>
-        </g>
       </svg>
+
+      <div
+        className="absolute"
+        style={{
+          left: `${(plane.x / VIEW_W) * 100}%`,
+          top: `${(plane.y / VIEW_H) * 100}%`,
+          width: '12%',
+          transform: `translate(-50%, -50%) rotate(${plane.angle * 0.6}deg) scale(${v.landed ? 0.3 : 1})`,
+          opacity: v.landed ? 0 : 1,
+          filter: v.tone === 'danger' || v.tone === 'muted' ? 'grayscale(1)' : 'none',
+          transition: `left ${moving ? '160ms linear' : '600ms cubic-bezier(.3,.7,.4,1)'}, top ${moving ? '160ms linear' : '600ms cubic-bezier(.3,.7,.4,1)'}, transform 600ms ease-out, opacity 400ms, filter 300ms`,
+        }}
+      >
+        <FlappingBird flap={flap} className={flap === 'slow' && !moving ? 'anim-hover' : ''} />
+      </div>
 
       <PeerNode
         side="sender"
