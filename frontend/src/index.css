@@ -34,6 +34,7 @@ html.dark {
   --c-warn: #e5b23a;
   --c-danger: #f26d6d;
   --c-danger-soft: rgba(242, 109, 109, 0.12);
+  --c-danger-fill: #b3261e;      /* fill behind white text */
   --c-bit-a: #6a9ad6;
   --c-bit-b: #a39489;
 }
@@ -58,6 +59,7 @@ html.light {
   --c-warn: #9a6a00;
   --c-danger: #c23131;
   --c-danger-soft: rgba(194, 49, 49, 0.09);
+  --c-danger-fill: #b3261e;
   --c-bit-a: #2f6aa8;
   --c-bit-b: #7d6f66;
 }
@@ -85,6 +87,7 @@ html.light {
   --color-warn: var(--c-warn);
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
+  --color-danger-fill: var(--c-danger-fill);
 }
 
 @layer base {

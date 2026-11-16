@@ -6,13 +6,14 @@ interface ProgressBarProps {
 }
 
 /**
- * µTorrent-style bar: a bordered track with the percentage centred on it. The label is drawn twice
- * (once on the track, once clipped to the fill with the same transition) so it stays readable on both backgrounds.
+ * µTorrent-style bar: a bordered track with the percentage centred on it. The filled part is a
+ * full-width layer (own background + white label) clipped to the percentage, so the label always has
+ * its own contrasting background and stays in sync with the fill.
  */
 export function ProgressBar({ percent, idleLabel, failed }: ProgressBarProps) {
   const p = percent === null ? 0 : Math.min(100, Math.max(0, percent));
   const label = percent === null ? idleLabel : `${p.toFixed(1)} %`;
-  const labelClass = 'absolute inset-y-0 flex items-center justify-center text-[0.6875rem] font-semibold tabular-nums';
+  const labelClass = 'absolute inset-0 flex items-center justify-center text-[0.6875rem] font-semibold tabular-nums';
 
   return (
     <div
@@ -24,17 +25,10 @@ export function ProgressBar({ percent, idleLabel, failed }: ProgressBarProps) {
       aria-valuetext={label}
       className="relative h-5 overflow-hidden rounded-sm border border-control bg-inset"
     >
-      {p > 0 && (
-        <div
-          className={`forced-fill absolute inset-y-0 left-0 transition-[width] duration-200 ease-linear ${failed ? 'bg-danger' : 'bg-primary'}`}
-          style={{ width: `${p}%` }}
-          aria-hidden
-        />
-      )}
-      <span className={`${labelClass} inset-x-0 ${percent === null ? 'text-dim' : 'text-fg'}`}>{label}</span>
+      <span className={`${labelClass} ${percent === null ? 'text-dim' : 'text-fg'}`}>{label}</span>
       {p > 0 && (
         <span
-          className={`${labelClass} inset-x-0 text-white transition-[clip-path] duration-200 ease-linear`}
+          className={`${labelClass} forced-fill text-white transition-[clip-path] duration-200 ease-linear ${failed ? 'bg-danger-fill' : 'bg-primary'}`}
           style={{ clipPath: `inset(0 ${100 - p}% 0 0)` }}
           aria-hidden
         >
