@@ -166,6 +166,12 @@ html.light {
   80% { transform: translateX(3px); }
 }
 
+@keyframes ftu-bit {
+  0% { opacity: 0; transform: translateX(0) scale(0.8); }
+  15% { opacity: 0.95; }
+  100% { opacity: 0; transform: translateX(-34px) scale(1); }
+}
+.anim-bit { animation: ftu-bit 1.3s linear infinite; }
 .anim-hover { animation: ftu-hover 2.4s ease-in-out infinite; }
 .anim-pulse-ring { animation: ftu-pulse-ring 1.8s ease-out infinite; }
 .anim-dash { animation: ftu-dash 1.2s linear infinite; }
