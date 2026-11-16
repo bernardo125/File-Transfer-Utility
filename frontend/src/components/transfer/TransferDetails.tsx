@@ -16,7 +16,12 @@ interface TransferDetailsProps {
   completed: TransferCompleted | null;
 }
 
-const COLUMNS = 'grid grid-cols-[minmax(0,1fr)_72px_128px_84px_72px] items-center gap-3 px-3';
+const COLUMNS = 'grid grid-cols-2 items-center gap-x-3 gap-y-1 px-3 sm:grid-cols-[minmax(0,1fr)_72px_128px_84px_72px]';
+
+/** Visible-only label shown when the columns stack on narrow windows; the header row names the cell for assistive tech. */
+function StackedLabel({ children }: { children: string }) {
+  return <span aria-hidden className="mr-1 text-dim sm:hidden">{children}</span>;
+}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -38,31 +43,33 @@ export function TransferDetails({ role, file, phase, progress, completed }: Tran
 
   return (
     <Panel>
-      <div className={`${COLUMNS} rounded-t-md border-b border-line bg-inset py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted`}>
-        <span>Name</span>
-        <span>Size</span>
-        <span>Status</span>
-        <span>Speed</span>
-        <span>Time left</span>
-      </div>
+      <div role="table" aria-label="Current transfer">
+        <div role="row" className={`${COLUMNS} rounded-t-md border-b border-line bg-inset py-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-muted max-sm:sr-only`}>
+          <span role="columnheader">Name</span>
+          <span role="columnheader">Size</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader">Speed</span>
+          <span role="columnheader">Time left</span>
+        </div>
 
-      <div className={`${COLUMNS} py-2.5 text-xs tabular-nums`}>
-        <span className="flex min-w-0 items-center gap-2">
-          <FileIcon className="size-4 shrink-0 text-accent" aria-hidden />
-          <span className="truncate font-semibold text-fg" title={file.name}>{file.name}</span>
-          {ext && <span className="shrink-0 rounded-sm border border-line px-1 text-[10px] font-semibold text-muted">{ext.slice(0, 5)}</span>}
-        </span>
-        <span className="text-fg">{formatBytes(file.size)}</span>
-        <span className={`truncate font-semibold ${statusTone}`}>{shortStatus(phase, role)}</span>
-        <span className="text-fg">{live ? formatSpeed(progress.speedMBs) : '—'}</span>
-        <span className="text-fg">{live && progress.etaSeconds > 0 ? formatDuration(progress.etaSeconds) : '—'}</span>
+        <div role="row" className={`${COLUMNS} py-2.5 text-xs tabular-nums`}>
+          <span role="cell" className="flex min-w-0 items-center gap-2 max-sm:col-span-2">
+            <FileIcon className="size-4 shrink-0 text-accent" aria-hidden />
+            <span className="truncate font-semibold text-fg" title={file.name}>{file.name}</span>
+            {ext && <span className="shrink-0 rounded-sm border border-line px-1 text-[0.625rem] font-semibold text-muted">{ext.slice(0, 5)}</span>}
+          </span>
+          <span role="cell" className="text-fg"><StackedLabel>Size</StackedLabel>{formatBytes(file.size)}</span>
+          <span role="cell" className={`truncate font-semibold ${statusTone}`}><StackedLabel>Status</StackedLabel>{shortStatus(phase, role)}</span>
+          <span role="cell" className="text-fg"><StackedLabel>Speed</StackedLabel>{live ? formatSpeed(progress.speedMBs) : '—'}</span>
+          <span role="cell" className="text-fg"><StackedLabel>Time left</StackedLabel>{live && progress.etaSeconds > 0 ? formatDuration(progress.etaSeconds) : '—'}</span>
+        </div>
       </div>
 
       <div className="px-3 pb-3">
         <ProgressBar percent={percent} idleLabel="Not started" failed={phase === 'failed'} />
       </div>
 
-      <dl className="grid gap-x-6 gap-y-1 rounded-b-md border-t border-line bg-inset px-3 py-2 text-[11px] sm:grid-cols-2">
+      <dl className="grid gap-x-6 gap-y-1 rounded-b-md border-t border-line bg-inset px-3 py-2 text-[0.6875rem] sm:grid-cols-2">
         <Field label="Transferred">
           {progress && hasBytes ? `${formatBytes(progress.bytesTransferred)} of ${formatBytes(progress.totalBytes || file.size)}` : '—'}
         </Field>
@@ -83,7 +90,11 @@ export function TransferDetails({ role, file, phase, progress, completed }: Tran
             '—'
           )}
         </Field>
-        {role === 'receive' && completed ? <Field label="Saved to"><span className="selectable" title={completed.destPath}>{completed.destPath}</span></Field> : <span />}
+        {role === 'receive' && completed && (
+          <Field label="Saved to">
+            <span className="selectable" title={completed.destPath}>{completed.destPath}</span>
+          </Field>
+        )}
       </dl>
     </Panel>
   );

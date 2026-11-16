@@ -42,7 +42,7 @@ export function ConnectingPanel({ state, detail, onCancel }: ConnectingPanelProp
                 )}
               </span>
               <span className={`flex-1 text-xs font-semibold ${done || active ? 'text-fg' : 'text-dim'}`}>{stage.label}</span>
-              <span className="text-[11px] text-dim">{stage.hint}</span>
+              <span className="text-[0.6875rem] text-dim">{stage.hint}</span>
             </li>
           );
         })}

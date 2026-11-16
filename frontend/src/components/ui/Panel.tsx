@@ -10,7 +10,7 @@ export function Panel({ title, className = '', children, ...rest }: PanelProps) 
   return (
     <section className={`rounded-md border border-line bg-surface ${className}`} {...rest}>
       {title && (
-        <h2 className="flex items-center gap-2 rounded-t-md border-b border-line bg-inset px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+        <h2 className="flex items-center gap-2 rounded-t-md border-b border-line bg-inset px-3 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-muted">
           {title}
         </h2>
       )}

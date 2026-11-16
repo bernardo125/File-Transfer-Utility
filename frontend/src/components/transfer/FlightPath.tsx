@@ -107,7 +107,7 @@ function PeerNode({ side, isYou, highlight, pulse, badge }: PeerNodeProps) {
         </div>
       </div>
       <span className="mt-2 text-xs font-bold text-fg">{isYou ? 'You' : 'Peer'}</span>
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-dim">{side === 'sender' ? 'Sender' : 'Receiver'}</span>
+      <span className="text-[0.625rem] font-semibold uppercase tracking-wider text-dim">{side === 'sender' ? 'Sender' : 'Receiver'}</span>
     </div>
   );
 }
@@ -159,7 +159,7 @@ export function FlightPath({ role, phase, fraction }: FlightPathProps) {
         style={{
           left: `${(plane.x / VIEW_W) * 100}%`,
           top: `${(plane.y / VIEW_H) * 100}%`,
-          width: '17%',
+          width: '8.5%',
           transform: `translate(-50%, -50%) rotate(${plane.angle * 0.7}deg) scale(${v.landed ? 0.3 : 1})`,
           opacity: v.landed ? 0 : 1,
           filter: v.tone === 'danger' || v.tone === 'muted' ? 'grayscale(1)' : 'none',

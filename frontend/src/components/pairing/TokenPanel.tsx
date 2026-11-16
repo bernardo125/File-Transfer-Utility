@@ -11,7 +11,7 @@ interface TokenPanelProps {
   onConnect: () => void;
 }
 
-const fieldLabel = 'mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted';
+const fieldLabel = 'mb-1 block text-[0.6875rem] font-semibold uppercase tracking-wider text-muted';
 
 /** The two pairing steps: share your token, then paste your peer's. */
 export function TokenPanel({ localToken, isLoadingToken, remoteToken, onRemoteTokenChange, onConnect }: TokenPanelProps) {
@@ -41,17 +41,18 @@ export function TokenPanel({ localToken, isLoadingToken, remoteToken, onRemoteTo
 
   return (
     <div className="flex flex-col gap-4">
+      <p role="status" className="sr-only">{copied ? 'Your token was copied to the clipboard.' : ''}</p>
       <div>
         <span id="your-token-label" className={fieldLabel}>Your token</span>
         <output
           aria-labelledby="your-token-label"
           aria-busy={isLoadingToken}
-          className="selectable block max-h-20 min-h-11 overflow-y-auto break-all rounded-sm border border-line bg-inset px-2.5 py-2 text-xs leading-relaxed text-fg"
+          className="selectable block max-h-20 min-h-11 overflow-y-auto break-all rounded-sm border border-control bg-inset px-2.5 py-2 text-xs leading-relaxed text-fg"
         >
           {isLoadingToken ? <span className="animate-pulse text-dim">Discovering your public address…</span> : localToken || <span className="text-dim">Unavailable</span>}
         </output>
         <div className="mt-1.5 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-dim">Send it to your peer through any chat or email.</p>
+          <p className="text-[0.6875rem] text-dim">Send it to your peer through any chat or email.</p>
           <Button variant="secondary" size="sm" icon={copied ? Check : Copy} disabled={isLoadingToken || !localToken} onClick={handleCopy}>
             {copied ? 'Copied' : 'Copy token'}
           </Button>
@@ -73,7 +74,8 @@ export function TokenPanel({ localToken, isLoadingToken, remoteToken, onRemoteTo
           placeholder="Paste the token your peer shared with you"
           rows={3}
           spellCheck={false}
-          className="w-full resize-none rounded-sm border border-line bg-inset px-2.5 py-2 text-xs leading-relaxed text-fg placeholder:text-dim focus:border-accent focus:outline-none transition-colors"
+          autoComplete="off"
+          className="w-full resize-none rounded-sm border border-control bg-inset px-2.5 py-2 text-xs leading-relaxed text-fg placeholder:text-dim focus:border-accent transition-colors"
         />
         <div className="mt-1.5 flex justify-end">
           <Button variant="secondary" size="sm" icon={ClipboardPaste} onClick={handlePaste}>

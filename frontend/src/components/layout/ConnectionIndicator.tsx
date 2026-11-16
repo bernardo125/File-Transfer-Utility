@@ -28,7 +28,7 @@ interface ConnectionIndicatorProps {
 /** Compact live connection status shown in the header. */
 export function ConnectionIndicator({ state, rttMs }: ConnectionIndicatorProps) {
   return (
-    <div role="status" className="inline-flex items-center gap-2 rounded-sm border border-line bg-inset px-2.5 py-1 text-[11px] text-muted">
+    <div role="status" className="inline-flex items-center gap-2 rounded-sm border border-line bg-inset px-2.5 py-1 text-[0.6875rem] text-muted">
       <span className={`size-2 rounded-full ${DOT[state]}`} aria-hidden />
       <span className="font-medium text-fg">{LABELS[state]}</span>
       {state === 'connected' && rttMs ? <span className="tabular-nums">· {rttMs} ms RTT</span> : null}

@@ -100,18 +100,19 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
           </Button>
         }
         center={
-          <span className="inline-flex items-center gap-2 rounded-sm border border-line bg-inset px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-fg">
+          <span className="inline-flex items-center gap-2 rounded-sm border border-line bg-inset px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-fg">
             <RoleIcon className="size-3.5 text-accent" aria-hidden />
             {role === 'send' ? 'Sending' : 'Receiving'} · Pair with your peer
           </span>
         }
       />
       <main className="flex flex-1 items-center justify-center overflow-y-auto px-6 pb-8 pt-14">
+        <h1 className="sr-only">Pair with your peer — {role === 'send' ? 'sending a file' : 'receiving a file'}</h1>
         <Panel title={connecting ? 'Connecting to peer' : 'Pair with your peer'} className="w-full max-w-3xl">
           <div className="grid items-center gap-6 md:grid-cols-[220px_1fr]">
           <div className="flex flex-col items-center gap-3 p-5 pr-0 text-center max-md:pr-5">
             <PairingVisual countdown={connecting ? { remaining, total: CONNECT_TIMEOUT_S } : undefined} />
-            <p className="max-w-[200px] text-[11px] text-dim">
+            <p className="max-w-[200px] text-[0.6875rem] text-dim">
               Tokens are exchanged by you, not by a server. Both peers connect directly.
             </p>
           </div>

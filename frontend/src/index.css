@@ -23,8 +23,9 @@ html.dark {
   --c-border: #38383e;
   --c-border-strong: #4a4a52;
   --c-fg: #f0f0f2;
-  --c-muted: #a3a3ab;
-  --c-dim: #8a8a94;
+  --c-muted: #adadb5;
+  --c-dim: #9c9ca6;
+  --c-control: #787882;       /* boundary of inputs/bars: >= 3:1 (WCAG 1.4.11) */
   --c-accent: #3cb54f;          /* text/lines on dark */
   --c-accent-soft: rgba(60, 181, 79, 0.14);
   --c-primary: #1f8434;         /* fills; AA with white text */
@@ -33,6 +34,8 @@ html.dark {
   --c-warn: #e5b23a;
   --c-danger: #f26d6d;
   --c-danger-soft: rgba(242, 109, 109, 0.12);
+  --c-bit-a: #6a9ad6;
+  --c-bit-b: #a39489;
 }
 
 html.light {
@@ -44,8 +47,9 @@ html.light {
   --c-border: #cfd2d8;
   --c-border-strong: #b0b4be;
   --c-fg: #18181b;
-  --c-muted: #52525b;
-  --c-dim: #6b6e78;
+  --c-muted: #4a4a53;
+  --c-dim: #5a5e6c;
+  --c-control: #868b99;
   --c-accent: #1d7b31;
   --c-accent-soft: rgba(31, 132, 52, 0.1);
   --c-primary: #1f8434;
@@ -54,6 +58,8 @@ html.light {
   --c-warn: #9a6a00;
   --c-danger: #c23131;
   --c-danger-soft: rgba(194, 49, 49, 0.09);
+  --c-bit-a: #2f6aa8;
+  --c-bit-b: #7d6f66;
 }
 
 @theme inline {
@@ -67,6 +73,7 @@ html.light {
   --color-inset: var(--c-inset);
   --color-line: var(--c-border);
   --color-line-strong: var(--c-border-strong);
+  --color-control: var(--c-control);
   --color-fg: var(--c-fg);
   --color-muted: var(--c-muted);
   --color-dim: var(--c-dim);
@@ -166,12 +173,6 @@ html.light {
   80% { transform: translateX(3px); }
 }
 
-@keyframes ftu-bit {
-  0% { opacity: 0; transform: translateX(0) scale(0.8); }
-  15% { opacity: 0.95; }
-  100% { opacity: 0; transform: translateX(-34px) scale(1); }
-}
-.anim-bit { animation: ftu-bit 1.3s linear infinite; }
 .anim-hover { animation: ftu-hover 2.4s ease-in-out infinite; }
 .anim-pulse-ring { animation: ftu-pulse-ring 1.8s ease-out infinite; }
 .anim-dash { animation: ftu-dash 1.2s linear infinite; }
@@ -181,31 +182,45 @@ html.light {
 .anim-ripple { animation: ftu-ripple 0.9s ease-out 1 both; }
 .anim-shake { animation: ftu-shake 0.45s ease-in-out 1; }
 
-/* Flapping magpie: wings/tail are sprite sheets of `--frames` poses; frame 0 is the rest pose. */
-.bird { position: relative; aspect-ratio: 280 / 281; --flap-duration: 0.9s; }
-.bird-flap-fast { --flap-duration: 0.45s; }
+/* Pairing magpie: the tail is a sprite sheet of `--frames` poses (frame 0 = rest); body and wings are still. */
+.bird { position: relative; aspect-ratio: 280 / 281; --sway-duration: 1.1s; }
 .bird-layer { position: absolute; inset: 0; overflow: hidden; }
 .bird-sheet { display: block; height: 100%; width: calc(var(--frames) * 100%); max-width: none; }
-.bird-flap .bird-sheet { animation: ftu-sheet var(--flap-duration) steps(var(--frames)) infinite; }
-.bird-flap .bird-body { animation: ftu-bob var(--flap-duration) ease-in-out infinite; }
+.bird-animated .bird-sheet { animation: ftu-sheet var(--sway-duration) steps(var(--frames)) infinite; }
 
 @keyframes ftu-sheet {
   from { transform: translateX(0); }
   to { transform: translateX(-100%); }
 }
-@keyframes ftu-bob {
-  0%, 100% { transform: translateY(0.5%); }
-  50% { transform: translateY(-0.5%); }
+
+@keyframes ftu-bit {
+  0% { opacity: 0; transform: translateX(0); }
+  20% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateX(-22px); }
 }
+.anim-bit { animation: ftu-bit 1.1s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  html:not(.motion-on) *,
+  html:not(.motion-on) *::before,
+  html:not(.motion-on) *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Windows High Contrast / forced colours: keep the progress fill visible. */
+.forced-fill { forced-color-adjust: none; }
+@media (forced-colors: active) {
+  .forced-fill { background-color: Highlight !important; }
 }
 
 /* Wails drag regions */

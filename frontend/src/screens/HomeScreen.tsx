@@ -68,7 +68,7 @@ export function HomeScreen({ onStart }: HomeScreenProps) {
             <ActionCard icon={Download} title="Receive" description="Catch a file from a peer" onClick={() => onStart('receive')} />
           </div>
 
-          <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11px] text-dim">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[0.6875rem] text-dim">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck className="size-3.5 text-accent" aria-hidden />
               Encrypted QUIC (TLS 1.3) · Ed25519 peer identity · SHA-256 verified

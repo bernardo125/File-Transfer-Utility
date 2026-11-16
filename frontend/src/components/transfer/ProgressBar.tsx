@@ -12,7 +12,7 @@ interface ProgressBarProps {
 export function ProgressBar({ percent, idleLabel, failed }: ProgressBarProps) {
   const p = percent === null ? 0 : Math.min(100, Math.max(0, percent));
   const label = percent === null ? idleLabel : `${p.toFixed(1)} %`;
-  const labelClass = 'absolute inset-y-0 flex items-center justify-center text-[11px] font-semibold tabular-nums';
+  const labelClass = 'absolute inset-y-0 flex items-center justify-center text-[0.6875rem] font-semibold tabular-nums';
 
   return (
     <div
@@ -22,11 +22,11 @@ export function ProgressBar({ percent, idleLabel, failed }: ProgressBarProps) {
       aria-valuemax={100}
       aria-valuenow={percent === null ? undefined : Math.floor(p)}
       aria-valuetext={label}
-      className="relative h-5 overflow-hidden rounded-sm border border-line-strong bg-inset"
+      className="relative h-5 overflow-hidden rounded-sm border border-control bg-inset"
     >
       {p > 0 && (
         <div
-          className={`absolute inset-y-0 left-0 transition-[width] duration-200 ease-linear ${failed ? 'bg-danger' : 'bg-primary'}`}
+          className={`forced-fill absolute inset-y-0 left-0 transition-[width] duration-200 ease-linear ${failed ? 'bg-danger' : 'bg-primary'}`}
           style={{ width: `${p}%` }}
           aria-hidden
         />

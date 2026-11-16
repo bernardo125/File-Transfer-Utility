@@ -54,11 +54,14 @@ export function TransferScreen({ role, onExit }: TransferScreenProps) {
         }
         center={<ConnectionIndicator state={connection.state} rttMs={connection.rttMs} />}
       />
+      <p role="status" className="sr-only">
+        {confirmingDisconnect ? 'Disconnecting will stop the transfer. Activate the button again within four seconds to confirm.' : ''}
+      </p>
       <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-4 pt-12">
         <div className="flex w-full max-w-3xl flex-col items-center gap-4">
           <FlightPath role={role} phase={phase} fraction={fraction} />
 
-          <div className="text-center" aria-live="polite">
+          <div className="text-center" aria-live={phase === 'deciding' || phase === 'failed' ? 'assertive' : 'polite'} aria-atomic="true">
             <h1 className={`text-base font-semibold ${phase === 'failed' ? 'text-danger' : 'text-fg'}`}>{copy.title}</h1>
             <p className="mt-0.5 text-xs text-muted">{copy.detail}</p>
           </div>

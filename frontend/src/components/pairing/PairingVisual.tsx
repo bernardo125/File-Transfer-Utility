@@ -1,4 +1,4 @@
-import { FlappingBird } from '../ui/FlappingBird';
+import { WaggingBird } from '../ui/WaggingBird';
 
 const RADIUS = 92;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -8,7 +8,7 @@ interface PairingVisualProps {
   countdown?: { remaining: number; total: number };
 }
 
-/** The magpie; while connecting it flaps and a ring around it drains with the real timeout. */
+/** The magpie; while connecting its tail sways and a ring around it drains with the real timeout. */
 export function PairingVisual({ countdown }: PairingVisualProps) {
   const fraction = countdown ? Math.max(0, countdown.remaining) / countdown.total : 1;
 
@@ -29,13 +29,13 @@ export function PairingVisual({ countdown }: PairingVisualProps) {
           style={{ transition: 'stroke-dashoffset 1s linear' }}
         />
       </svg>
-      <FlappingBird
-        flap={countdown ? 'slow' : 'off'}
+      <WaggingBird
+        animated={!!countdown}
         className={`transition-[width] duration-500 ease-out ${countdown ? 'w-[60%]' : 'w-[72%]'}`}
       />
       {countdown && (
         <span
-          className="absolute bottom-3 rounded-sm border border-line bg-surface px-2 py-0.5 text-[11px] font-semibold tabular-nums text-muted"
+          className="absolute bottom-3 rounded-sm border border-line bg-surface px-2 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-muted"
           role="timer"
           aria-label={`${countdown.remaining} seconds before the attempt times out`}
         >
