@@ -182,8 +182,8 @@ html.light {
 .anim-ripple { animation: ftu-ripple 0.9s ease-out 1 both; }
 .anim-shake { animation: ftu-shake 0.45s ease-in-out 1; }
 
-/* Pairing magpie: the tail is a sprite sheet of `--frames` poses (frame 0 = rest); body and wings are still. */
-.bird { position: relative; aspect-ratio: 280 / 281; --sway-duration: 1.1s; }
+/* Pairing magpie: wings and tail are sprite sheets of `--frames` poses (frame 0 = rest); the body is still. */
+.bird { position: relative; aspect-ratio: 280 / 281; --sway-duration: 1.3s; }
 .bird-layer { position: absolute; inset: 0; overflow: hidden; }
 .bird-sheet { display: block; height: 100%; width: calc(var(--frames) * 100%); max-width: none; }
 .bird-animated .bird-sheet { animation: ftu-sheet var(--sway-duration) steps(var(--frames)) infinite; }
@@ -195,10 +195,16 @@ html.light {
 
 @keyframes ftu-bit {
   0% { opacity: 0; transform: translateX(0); }
-  20% { opacity: 0.9; }
-  100% { opacity: 0; transform: translateX(-22px); }
+  18% { opacity: 0.95; }
+  100% { opacity: 0; transform: translateX(var(--bit-drift, -20px)); }
 }
-.anim-bit { animation: ftu-bit 1.1s linear infinite; }
+/* Each digit shows "0" and "1" alternately, fast; with motion off it settles on a still "0". */
+@keyframes ftu-bit-a { 0%, 49.99% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes ftu-bit-b { 0%, 49.99% { opacity: 0; } 50%, 100% { opacity: 1; } }
+.anim-bit { animation: ftu-bit 0.75s linear infinite; font-style: normal; }
+.anim-bit i { font-style: normal; }
+.anim-bit .bit-a { display: inline-block; animation: ftu-bit-a 0.28s steps(1) infinite; }
+.anim-bit .bit-b { position: absolute; inset: 0; opacity: 0; animation: ftu-bit-b 0.28s steps(1) infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   html:not(.motion-on) *,

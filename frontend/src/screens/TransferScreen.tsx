@@ -57,7 +57,7 @@ export function TransferScreen({ role, onExit }: TransferScreenProps) {
       <p role="status" className="sr-only">
         {confirmingDisconnect ? 'Disconnecting will stop the transfer. Activate the button again within four seconds to confirm.' : ''}
       </p>
-      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-4 pt-12">
+      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-4 pt-12 max-sm:pb-16">
         <div className="flex w-full max-w-3xl flex-col items-center gap-4">
           <FlightPath role={role} phase={phase} fraction={fraction} />
 

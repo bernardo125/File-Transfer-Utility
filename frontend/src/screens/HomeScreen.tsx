@@ -59,7 +59,7 @@ export function HomeScreen({ onStart }: HomeScreenProps) {
 
   return (
     <>
-      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8">
+      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-16 pt-8">
         <div className="flex w-full max-w-xl flex-col items-center gap-7">
           <BrandMark />
 

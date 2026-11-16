@@ -1,4 +1,4 @@
-import { WaggingBird } from '../ui/WaggingBird';
+import { PairingBird } from '../ui/PairingBird';
 
 const RADIUS = 92;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -8,7 +8,7 @@ interface PairingVisualProps {
   countdown?: { remaining: number; total: number };
 }
 
-/** The magpie; while connecting its tail sways and a ring around it drains with the real timeout. */
+/** The magpie; while connecting its wings and tail move gently and a ring around it drains with the real timeout. */
 export function PairingVisual({ countdown }: PairingVisualProps) {
   const fraction = countdown ? Math.max(0, countdown.remaining) / countdown.total : 1;
 
@@ -29,7 +29,7 @@ export function PairingVisual({ countdown }: PairingVisualProps) {
           style={{ transition: 'stroke-dashoffset 1s linear' }}
         />
       </svg>
-      <WaggingBird
+      <PairingBird
         animated={!!countdown}
         className={`transition-[width] duration-500 ease-out ${countdown ? 'w-[60%]' : 'w-[72%]'}`}
       />
