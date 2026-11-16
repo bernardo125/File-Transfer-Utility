@@ -1,4 +1,4 @@
-import pairingBird from '../../assets/photos/magpie-pairing.webp';
+import { FlappingBird } from '../ui/FlappingBird';
 
 const RADIUS = 92;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -8,7 +8,7 @@ interface PairingVisualProps {
   countdown?: { remaining: number; total: number };
 }
 
-/** The magpie; while connecting, a ring around it drains with the real timeout. */
+/** The magpie; while connecting it flaps and a ring around it drains with the real timeout. */
 export function PairingVisual({ countdown }: PairingVisualProps) {
   const fraction = countdown ? Math.max(0, countdown.remaining) / countdown.total : 1;
 
@@ -29,12 +29,9 @@ export function PairingVisual({ countdown }: PairingVisualProps) {
           style={{ transition: 'stroke-dashoffset 1s linear' }}
         />
       </svg>
-      <img
-        src={pairingBird}
-        alt=""
-        width={359}
-        height={360}
-        className={`relative transition-[width] duration-500 ease-out ${countdown ? 'anim-hover w-[56%]' : 'w-[72%]'}`}
+      <FlappingBird
+        flap={countdown ? 'slow' : 'off'}
+        className={`transition-[width] duration-500 ease-out ${countdown ? 'w-[60%]' : 'w-[72%]'}`}
       />
       {countdown && (
         <span

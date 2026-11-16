@@ -175,6 +175,28 @@ html.light {
 .anim-ripple { animation: ftu-ripple 0.9s ease-out 1 both; }
 .anim-shake { animation: ftu-shake 0.45s ease-in-out 1; }
 
+/* Flapping magpie: layers share one canvas; wings rotate about their shoulders. */
+.bird { position: relative; aspect-ratio: 1; --flap-duration: 0.9s; }
+.bird-flap-fast { --flap-duration: 0.42s; }
+.bird-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bird-wing-up { transform-origin: 46% 46%; --from: 6deg; --to: -10deg; }
+.bird-wing-right { transform-origin: 64% 53%; --from: 5deg; --to: -9deg; }
+.bird-tail { transform-origin: 42% 58%; --from: -2deg; --to: 3deg; }
+.bird-flap .bird-wing-up,
+.bird-flap .bird-wing-right,
+.bird-flap .bird-tail { animation: ftu-flap var(--flap-duration) ease-in-out infinite; }
+.bird-flap .bird-tail { animation-delay: calc(var(--flap-duration) * -0.15); }
+.bird-flap .bird-body { animation: ftu-bob var(--flap-duration) ease-in-out infinite; }
+
+@keyframes ftu-flap {
+  0%, 100% { transform: rotate(var(--from)); }
+  50% { transform: rotate(var(--to)); }
+}
+@keyframes ftu-bob {
+  0%, 100% { transform: translateY(0.8%); }
+  50% { transform: translateY(-0.8%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
