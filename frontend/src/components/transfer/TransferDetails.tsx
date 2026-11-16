@@ -1,111 +1,90 @@
-import { FileIcon, Fingerprint, ShieldCheck } from 'lucide-react';
+import { FileIcon, ShieldCheck } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { TransferCompleted, TransferPhase, TransferProgress } from '../../types/transfer';
+import type { PeerRole } from '../../types/navigation';
 import type { ActiveFile } from '../../hooks/useTransferController';
+import { shortStatus } from '../../lib/transferPhase';
 import { fileExtension, formatBytes, formatDuration, formatSpeed, shortHash } from '../../utils/format';
+import { Panel } from '../ui/Panel';
+import { ProgressBar } from './ProgressBar';
 
 interface TransferDetailsProps {
+  role: PeerRole;
   file: ActiveFile;
   phase: TransferPhase;
   progress: TransferProgress | null;
   completed: TransferCompleted | null;
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+const COLUMNS = 'grid grid-cols-[minmax(0,1fr)_72px_128px_84px_72px] items-center gap-3 px-3';
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-[11px] font-medium uppercase tracking-wider text-dim">{label}</dt>
-      <dd className="truncate text-sm font-semibold tabular-nums text-fg">{value}</dd>
+    <div className="flex min-w-0 gap-2">
+      <dt className="w-24 shrink-0 text-dim">{label}</dt>
+      <dd className="min-w-0 truncate text-fg">{children}</dd>
     </div>
   );
 }
 
-function integrityLabel(phase: TransferPhase, completed: TransferCompleted | null): string {
-  if (completed?.hashVerified) return 'Checksum verified';
-  if (phase === 'verifying') return 'Verifying checksum…';
-  if (phase === 'failed') return 'Not verified';
-  return 'Verified on arrival';
-}
-
-/** File identity, honest progress figures and SHA-256 status for the active transfer. */
-export function TransferDetails({ file, phase, progress, completed }: TransferDetailsProps) {
+/** The active transfer as a download-manager row: list columns, progress bar and a General strip. */
+export function TransferDetails({ role, file, phase, progress, completed }: TransferDetailsProps) {
   const ext = fileExtension(file.name);
-  const showBar = phase === 'transferring' || phase === 'verifying' || phase === 'completed' || (phase === 'failed' && progress);
-  const percent = completed ? 100 : Math.min(100, Math.max(0, progress?.percentage ?? 0));
-  const hasLiveRate = phase === 'transferring' && progress !== null && progress.speedMBs > 0;
+  const hasBytes = phase === 'transferring' || phase === 'verifying' || phase === 'completed' || (phase === 'failed' && progress !== null);
+  const percent = completed ? 100 : hasBytes ? progress?.percentage ?? 0 : null;
+  const live = phase === 'transferring' && progress !== null && progress.speedMBs > 0;
   const verified = completed?.hashVerified === true;
+  const statusTone = phase === 'failed' || phase === 'declined' ? 'text-danger' : phase === 'completed' ? 'text-accent' : 'text-fg';
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <div className="relative flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-          <FileIcon className="size-6" aria-hidden />
-          {ext && (
-            <span className="absolute -bottom-1.5 rounded bg-surface px-1 text-[9px] font-bold tracking-wide text-accent ring-1 ring-line">
-              {ext.slice(0, 4)}
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-bold text-fg" title={file.name}>{file.name}</p>
-          <p className="text-sm text-muted tabular-nums">{formatBytes(file.size)}</p>
-        </div>
-        {showBar && (
-          <span className={`text-2xl font-extrabold tabular-nums ${phase === 'failed' ? 'text-danger' : 'text-accent'}`}>
-            {Math.floor(percent)}%
-          </span>
-        )}
+    <Panel>
+      <div className={`${COLUMNS} rounded-t-md border-b border-line bg-inset py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted`}>
+        <span>Name</span>
+        <span>Size</span>
+        <span>Status</span>
+        <span>Speed</span>
+        <span>Time left</span>
       </div>
 
-      {showBar && (
-        <div
-          role="progressbar"
-          aria-label="Transfer progress"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.floor(percent)}
-          className="h-2 overflow-hidden rounded-full bg-inset"
-        >
-          <div
-            className={`h-full rounded-full transition-[width] duration-200 ease-linear ${phase === 'failed' ? 'bg-danger' : 'bg-accent'}`}
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-      )}
+      <div className={`${COLUMNS} py-2.5 text-xs tabular-nums`}>
+        <span className="flex min-w-0 items-center gap-2">
+          <FileIcon className="size-4 shrink-0 text-accent" aria-hidden />
+          <span className="truncate font-semibold text-fg" title={file.name}>{file.name}</span>
+          {ext && <span className="shrink-0 rounded-sm border border-line px-1 text-[10px] font-semibold text-muted">{ext.slice(0, 5)}</span>}
+        </span>
+        <span className="text-fg">{formatBytes(file.size)}</span>
+        <span className={`truncate font-semibold ${statusTone}`}>{shortStatus(phase, role)}</span>
+        <span className="text-fg">{live ? formatSpeed(progress.speedMBs) : '—'}</span>
+        <span className="text-fg">{live && progress.etaSeconds > 0 ? formatDuration(progress.etaSeconds) : '—'}</span>
+      </div>
 
-      {(phase === 'transferring' || phase === 'verifying' || completed) && (
-        <dl className="grid grid-cols-3 gap-4">
-          {completed ? (
-            <>
-              <Metric label="Size" value={formatBytes(completed.fileSize)} />
-              <Metric label="Time" value={formatDuration(completed.durationSec)} />
-              <Metric label="Avg. speed" value={formatSpeed(completed.speedMBs)} />
-            </>
+      <div className="px-3 pb-3">
+        <ProgressBar percent={percent} idleLabel="Not started" failed={phase === 'failed'} />
+      </div>
+
+      <dl className="grid gap-x-6 gap-y-1 rounded-b-md border-t border-line bg-inset px-3 py-2 text-[11px] sm:grid-cols-2">
+        <Field label="Transferred">
+          {progress && hasBytes ? `${formatBytes(progress.bytesTransferred)} of ${formatBytes(progress.totalBytes || file.size)}` : '—'}
+        </Field>
+        <Field label={completed ? 'Avg. speed' : 'Direction'}>
+          {completed ? `${formatSpeed(completed.speedMBs)} in ${formatDuration(completed.durationSec)}` : role === 'send' ? 'You → Peer' : 'Peer → You'}
+        </Field>
+        <Field label="SHA-256">
+          {file.hash ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="selectable" title={file.hash}>{shortHash(file.hash, 8)}</span>
+              {verified ? (
+                <span className="anim-pop inline-flex items-center gap-1 font-semibold text-accent"><ShieldCheck className="size-3" aria-hidden />verified</span>
+              ) : phase === 'verifying' ? (
+                <span className="text-muted">checking…</span>
+              ) : null}
+            </span>
           ) : (
-            <>
-              <Metric
-                label="Transferred"
-                value={progress ? `${formatBytes(progress.bytesTransferred)} of ${formatBytes(progress.totalBytes || file.size)}` : '—'}
-              />
-              <Metric label="Speed" value={hasLiveRate ? formatSpeed(progress.speedMBs) : '—'} />
-              <Metric
-                label="Time left"
-                value={phase === 'verifying' ? 'Checking…' : hasLiveRate && progress.etaSeconds > 0 ? formatDuration(progress.etaSeconds) : '—'}
-              />
-            </>
+            '—'
           )}
-        </dl>
-      )}
-
-      {file.hash && (
-        <div className="flex items-center gap-2 rounded-lg border border-line bg-inset px-3 py-2 text-xs">
-          {verified ? <ShieldCheck className="size-4 shrink-0 text-accent" aria-hidden /> : <Fingerprint className="size-4 shrink-0 text-dim" aria-hidden />}
-          <span className="font-semibold text-muted">SHA-256</span>
-          <span className="selectable truncate font-mono text-dim" title={file.hash}>{shortHash(file.hash, 10)}</span>
-          <span className={`ml-auto shrink-0 font-semibold ${verified ? 'text-accent' : phase === 'failed' ? 'text-danger' : 'text-muted'}`}>
-            {integrityLabel(phase, completed)}
-          </span>
-        </div>
-      )}
-    </div>
+        </Field>
+        {role === 'receive' && completed ? <Field label="Saved to"><span className="selectable" title={completed.destPath}>{completed.destPath}</span></Field> : <span />}
+      </dl>
+    </Panel>
   );
 }

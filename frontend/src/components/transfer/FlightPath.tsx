@@ -82,28 +82,30 @@ function PeerNode({ side, isYou, highlight, pulse, badge }: PeerNodeProps) {
   const top = `${(NODE_Y / VIEW_H) * 100}%`;
   return (
     <div className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left, top }}>
-      <div className="relative">
-        {pulse && <span className="anim-pulse-ring absolute inset-0 rounded-2xl border-2 border-accent" aria-hidden />}
+      <div className={`relative ${badge === 'danger' ? 'anim-shake' : ''}`} key={badge === 'danger' ? 'failed' : 'ok'}>
+        {pulse && <span className="anim-pulse-ring absolute inset-0 rounded-md border-2 border-accent" aria-hidden />}
+        {badge === 'success' && <span className="anim-ripple absolute inset-0 rounded-md border-2 border-accent" aria-hidden />}
         <div
-          className={`relative flex size-16 items-center justify-center rounded-2xl border-2 bg-surface shadow-card transition-colors duration-300 ${
-            highlight ? 'border-accent text-accent' : 'border-line text-muted'
+          className={`relative flex size-14 items-center justify-center rounded-md border-2 bg-surface transition-colors duration-300 ${
+            highlight ? 'border-accent text-accent' : 'border-line-strong text-muted'
           }`}
         >
-          <Laptop className="size-7" aria-hidden />
+          <Laptop className="size-6" aria-hidden />
           {badge && (
             <span
-              className={`anim-fade-up absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full border-2 border-surface ${
-                badge === 'danger' ? 'bg-danger text-white' : 'bg-accent text-bg'
+              key={badge}
+              className={`anim-pop absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full border-2 border-surface ${
+                badge === 'danger' ? 'bg-danger text-white' : 'bg-primary text-white'
               }`}
               aria-hidden
             >
-              {badge === 'success' ? <Check className="size-3.5" /> : badge === 'verifying' ? <ShieldCheck className="size-3.5" /> : <X className="size-3.5" />}
+              {badge === 'success' ? <Check className="size-3" /> : badge === 'verifying' ? <ShieldCheck className="size-3" /> : <X className="size-3" />}
             </span>
           )}
         </div>
       </div>
-      <span className="mt-2 text-sm font-bold text-fg">{isYou ? 'You' : 'Peer'}</span>
-      <span className="text-[11px] font-medium uppercase tracking-wider text-dim">{side === 'sender' ? 'Sender' : 'Receiver'}</span>
+      <span className="mt-2 text-xs font-bold text-fg">{isYou ? 'You' : 'Peer'}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-dim">{side === 'sender' ? 'Sender' : 'Receiver'}</span>
     </div>
   );
 }
@@ -149,7 +151,7 @@ export function FlightPath({ role, phase, fraction }: FlightPathProps) {
         {/* Paper plane */}
         <g
           style={{
-            transform: `translate(${plane.x}px, ${plane.y}px) rotate(${plane.angle}deg)`,
+            transform: `translate(${plane.x}px, ${plane.y}px) rotate(${plane.angle}deg) scale(${v.landed ? 0.3 : 1})`,
             transition: `transform ${moving ? '160ms linear' : '600ms cubic-bezier(.3,.7,.4,1)'}, opacity 300ms`,
             opacity: v.landed ? 0 : 1,
           }}
@@ -172,9 +174,9 @@ export function FlightPath({ role, phase, fraction }: FlightPathProps) {
       <PeerNode
         side="receiver"
         isYou={role === 'receive'}
-        highlight={v.t >= 1 || v.pulse === 'receiver'}
+        highlight={v.t >= 1 || v.pulse === 'receiver' || phase === 'deciding'}
         pulse={v.pulse === 'receiver'}
-        badge={phase === 'completed' ? 'success' : phase === 'verifying' ? 'verifying' : phase === 'failed' ? 'danger' : null}
+        badge={phase === 'completed' ? 'success' : phase === 'verifying' ? 'verifying' : phase === 'failed' || phase === 'declined' ? 'danger' : null}
       />
     </div>
   );

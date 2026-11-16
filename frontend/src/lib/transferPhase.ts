@@ -65,3 +65,18 @@ export function describePhase(phase: TransferPhase, role: PeerRole): PhaseCopy {
       return { title: 'Transfer failed', detail: 'The transfer stopped before it finished.' };
   }
 }
+
+/** One- or two-word status for compact list rows. */
+export function shortStatus(phase: TransferPhase, role: PeerRole): string {
+  switch (phase) {
+    case 'idle': return 'Ready';
+    case 'preparing': return 'Preparing';
+    case 'awaiting': return 'Awaiting approval';
+    case 'deciding': return 'Awaiting you';
+    case 'transferring': return role === 'send' ? 'Sending' : 'Receiving';
+    case 'verifying': return 'Verifying';
+    case 'completed': return role === 'send' ? 'Delivered' : 'Received';
+    case 'declined': return 'Declined';
+    case 'failed': return 'Failed';
+  }
+}

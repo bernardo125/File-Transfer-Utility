@@ -5,7 +5,6 @@ import { describePhase } from '../lib/transferPhase';
 import { AppHeader } from '../components/layout/AppHeader';
 import { ConnectionIndicator } from '../components/layout/ConnectionIndicator';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
 import { Notice } from '../components/ui/Notice';
 import { FlightPath } from '../components/transfer/FlightPath';
 import { TransferDetails } from '../components/transfer/TransferDetails';
@@ -56,12 +55,12 @@ export function TransferScreen({ role, onExit }: TransferScreenProps) {
         center={<ConnectionIndicator state={connection.state} rttMs={connection.rttMs} />}
       />
       <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-4">
-        <div className="flex w-full max-w-2xl flex-col items-center gap-5">
+        <div className="flex w-full max-w-3xl flex-col items-center gap-4">
           <FlightPath role={role} phase={phase} fraction={fraction} />
 
           <div className="text-center" aria-live="polite">
-            <h1 className={`text-2xl font-extrabold tracking-tight ${phase === 'failed' ? 'text-danger' : 'text-fg'}`}>{copy.title}</h1>
-            <p className="mt-1 text-sm text-muted">{copy.detail}</p>
+            <h1 className={`text-base font-semibold ${phase === 'failed' ? 'text-danger' : 'text-fg'}`}>{copy.title}</h1>
+            <p className="mt-0.5 text-xs text-muted">{copy.detail}</p>
           </div>
 
           {peerLost && (
@@ -73,9 +72,9 @@ export function TransferScreen({ role, onExit }: TransferScreenProps) {
           )}
 
           {file && (
-            <Card key={file.name + file.size} className="anim-fade-up w-full p-5">
-              <TransferDetails file={file} phase={phase} progress={progress} completed={completed} />
-            </Card>
+            <div key={file.name + file.size} className="anim-fade-up w-full">
+              <TransferDetails role={role} file={file} phase={phase} progress={progress} completed={completed} />
+            </div>
           )}
 
           {phase === 'failed' && errorText && (
