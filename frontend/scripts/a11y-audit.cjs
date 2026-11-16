@@ -48,7 +48,7 @@ async function toState(p, state, role = 'Send') {
   const b = await puppeteer.launch({ executablePath: process.env.CHROME, headless: true, args: ['--no-sandbox'] });
   const newPage = async (theme, w = 980, h = 680) => {
     const p = await b.newPage(); await p.setViewport({ width: w, height: h });
-    await p.evaluateOnNewDocument((t) => { localStorage.setItem('ftu_theme', t); localStorage.setItem('ftu_reduce_motion', 'false'); }, theme);
+    await p.evaluateOnNewDocument((t) => { localStorage.setItem('ftu_theme', t); }, theme);
     return p;
   };
 
@@ -75,7 +75,7 @@ async function toState(p, state, role = 'Send') {
   {
     const p = await newPage('dark'); await p.goto(BASE, { waitUntil: 'networkidle0' });
     const seq = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       await p.keyboard.press('Tab');
       seq.push(await p.evaluate(() => { const e = document.activeElement; const cs = getComputedStyle(e); return { name: e.getAttribute('aria-label') || e.textContent.trim().slice(0, 24), outline: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2, border: cs.borderColor }; }));
     }
@@ -94,20 +94,21 @@ async function toState(p, state, role = 'Send') {
     await p.close();
   }
 
-  // 4. motion: OS preference and in-app toggle (2.2.2, EN 301 549 11.7)
+  // 4. motion: the OS "reduce motion" setting stops looping animations (2.2.2, EN 301 549 11.7)
   {
-    const p = await newPage('dark'); await p.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
-    await p.evaluateOnNewDocument(() => localStorage.removeItem('ftu_reduce_motion'));
-    await toState(p, 'connecting');
-    const osReduced = await p.evaluate(() => document.documentElement.classList.contains('reduce-motion') && [...document.querySelectorAll('.bird-sheet')].every((e) => parseFloat(getComputedStyle(e).animationDuration) < 0.01));
-    check('2.2.2/11.7 OS "reduce motion" stops the wing animation', osReduced);
+    const p = await newPage('dark'); await toState(p, 'connecting');
+    const running = await p.evaluate(() => [...document.querySelectorAll('.bird-sheet')].some((e) => parseFloat(getComputedStyle(e).animationDuration) > 0.1));
     await p.close();
-    const q = await newPage('dark'); await toState(q, 'connecting');
-    const running = await q.evaluate(() => [...document.querySelectorAll('.bird-sheet')].some((e) => parseFloat(getComputedStyle(e).animationDuration) > 0.1));
-    await q.evaluate(() => document.querySelector('[aria-label="Reduce animations"]').click()); await wait(200);
-    const stopped = await q.evaluate(() => { const t = document.querySelector('[aria-label="Reduce animations"]'); return t.getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('.bird-sheet')].every((e) => parseFloat(getComputedStyle(e).animationDuration) < 0.01); });
-    check('2.2.2 in-app toggle stops animations (aria-pressed reflects state)', running && stopped, `running=${running} stopped=${stopped}`);
+    const q = await newPage('dark'); await q.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+    await toState(q, 'connecting');
+    const stopped = await q.evaluate(() => [...document.querySelectorAll('.bird-sheet')].every((e) => parseFloat(getComputedStyle(e).animationDuration) < 0.01));
+    check('2.2.2/11.7 OS "reduce motion" stops the pairing animation (and it runs otherwise)', running && stopped, `running=${running} stopped=${stopped}`);
     await q.close();
+    const r = await newPage('dark'); await r.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+    await toState(r, 'transferring');
+    const bitsStill = await r.evaluate(() => [...document.querySelectorAll('.anim-bit')].every((e) => parseFloat(getComputedStyle(e).animationDuration) < 0.01));
+    check('2.2.2/11.7 OS "reduce motion" stops the transfer bit trail', bitsStill);
+    await r.close();
   }
 
   // 5. reflow at 320 CSS px (1.4.10) and text enlarged to 200% (1.4.4)

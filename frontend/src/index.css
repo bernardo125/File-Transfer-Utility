@@ -197,33 +197,27 @@ html.light {
 }
 
 @keyframes ftu-bit {
-  0% { opacity: 0; transform: translateX(0); }
-  18% { opacity: 0.95; }
-  100% { opacity: 0; transform: translateX(var(--bit-drift, -20px)); }
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate(var(--bit-dx, -10px), var(--bit-dy, 0px)); }
 }
-/* Each digit shows "0" and "1" alternately, fast; with motion off it settles on a still "0". */
+/* Each digit shows "0" and "1" alternately at its own fast rate; with motion off it rests on a still "0". */
 @keyframes ftu-bit-a { 0%, 49.99% { opacity: 1; } 50%, 100% { opacity: 0; } }
 @keyframes ftu-bit-b { 0%, 49.99% { opacity: 0; } 50%, 100% { opacity: 1; } }
-.anim-bit { animation: ftu-bit 0.75s linear infinite; font-style: normal; }
+.anim-bit { animation: ftu-bit var(--bit-dur, 0.8s) linear infinite; }
 .anim-bit i { font-style: normal; }
-.anim-bit .bit-a { display: inline-block; animation: ftu-bit-a 0.28s steps(1) infinite; }
-.anim-bit .bit-b { position: absolute; inset: 0; opacity: 0; animation: ftu-bit-b 0.28s steps(1) infinite; }
+.anim-bit .bit-a { display: inline-block; animation: ftu-bit-a var(--bit-flip, 0.16s) steps(1) infinite; }
+.anim-bit .bit-b { position: absolute; inset: 0; opacity: 0; animation: ftu-bit-b var(--bit-flip, 0.16s) steps(1) infinite; }
 
+/* Motion preference (WCAG 2.2.2 / EN 301 549 11.7): follow the OS "reduce motion" setting. */
 @media (prefers-reduced-motion: reduce) {
-  html:not(.motion-on) *,
-  html:not(.motion-on) *::before,
-  html:not(.motion-on) *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-}
-html.reduce-motion *,
-html.reduce-motion *::before,
-html.reduce-motion *::after {
-  animation-duration: 0.001ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.001ms !important;
 }
 
 /* Windows High Contrast / forced colours: keep the progress fill visible. */

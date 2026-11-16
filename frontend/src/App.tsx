@@ -3,7 +3,6 @@ import { HomeScreen } from './screens/HomeScreen';
 import { PairingScreen } from './screens/PairingScreen';
 import { TransferScreen } from './screens/TransferScreen';
 import { ThemeProvider } from './context/ThemeContext';
-import { MotionProvider } from './context/MotionContext';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 import { SessionProvider } from './context/SessionContext';
 import { FloatingTools } from './components/layout/FloatingTools';
@@ -49,11 +48,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <MotionProvider>
-        <SessionProvider>
-          <AppContent />
-        </SessionProvider>
-      </MotionProvider>
+      <SessionProvider>
+        <AppContent />
+      </SessionProvider>
     </ThemeProvider>
   );
 }

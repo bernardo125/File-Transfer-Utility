@@ -9,7 +9,7 @@ Autoavaliação da interface do FTU (File Throw) feita sobre o código da branch
 | Método | Detalhe | Reprodução |
 |---|---|---|
 | Teste automático axe-core | axe-core 4.14.0, tags `wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa, best-practice`; 8 estados × 2 temas (home, pairing, connecting, transfer, awaiting, transferring, completed, deciding) | `frontend/scripts/a11y-audit.cjs` |
-| Testes dirigidos (19) | títulos, foco após navegação, ordem de tabulação, anel de foco, fluxo só com teclado, movimento reduzido (SO e botão), reflow a 320 px, texto a 200 %, estrutura (h1/main/nomes), anúncio assertivo | idem |
+| Testes dirigidos (19) | títulos, foco após navegação, ordem de tabulação, anel de foco, fluxo só com teclado, movimento reduzido (definição do SO), reflow a 320 px, texto a 200 %, estrutura (h1/main/nomes), anúncio assertivo | idem |
 | Lighthouse 13.5.0 | Chromium 156, preset desktop, build de produção (`vite preview`), ecrã Home, tema claro e escuro | `lighthouse http://localhost:4173 --preset=desktop` |
 | Cálculo de contraste | Fórmula WCAG 2.x sobre os tokens de `frontend/src/index.css` (tabela na secção 4) | — |
 | Inspeção de código | Para critérios sem teste automático (semântica, ordem DOM, ausência de gestos, etc.) | — |
@@ -49,7 +49,7 @@ PUPPETEER=<caminho>/puppeteer-core AXE=<caminho>/axe.min.js CHROME=/usr/bin/chro
 | F-09 | "Copiado" só visual | 4.1.3 | Região `role="status"` | `TokenPanel.tsx` |
 | F-10 | Oferta de ficheiro (exige ação) anunciada só em modo educado | 4.1.3 | `aria-live="assertive"` em `deciding` e `failed` | `TransferScreen.tsx` |
 | F-11 | Pedido de confirmação ao desligar durante a transferência só visual | 4.1.3 / 3.3.4 | Mensagem de estado anunciada | `TransferScreen.tsx` |
-| F-12 | Animações em ciclo só controláveis via definição do SO | 2.2.2 / 11.7 | Botão "Reduce animations" (`aria-pressed`), persistido; respeita a preferência do SO por omissão | `MotionContext.tsx`, `MotionToggle.tsx`, `index.css` |
+| F-12 | Animações em ciclo (pássaro no pairing, rasto de bits na transferência) | 2.2.2 / 11.7 | Todas param com `prefers-reduced-motion` (regra `*` em `index.css`) e só correm enquanto há um estado real a representar. **Não há controlo dentro da aplicação** (o botão foi removido a pedido) | `index.css` |
 | F-13 | Bordas de campos e da pista de progresso com < 3:1 | 1.4.11 | Token `--c-control` (≥ 3:1) | `index.css`, `TokenPanel.tsx`, `ProgressBar.tsx` |
 | F-14 | Tamanhos de letra em `px` | 1.4.4 | Convertidos para `rem` | todos os `.tsx` |
 | F-15 | Lista da transferência feita de `div`s sem semântica de tabela | 1.3.1 | `role=table/row/columnheader/cell`; colunas empilham em janelas estreitas | `TransferDetails.tsx` |
@@ -108,8 +108,8 @@ Testes referem-se a `scripts/a11y-audit.cjs` (axe = execução axe-core).
 | R-16 | 11.2.1.2 | 2.1.2 | Sem armadilha de teclado | — | Sem *focus traps* nem diálogos modais | Inspeção; teste de tabulação | ✔ I |
 | R-17 | 11.2.1.4 | 2.1.4 | Atalhos de tecla única | — | Não existem atalhos | Inspeção | N/A |
 | R-18 | 11.2.2.1 | 2.2.1 | Tempo ajustável | — | Existem limites: 30 s para ligar e 120 s para aceitar (backend). São de **tempo real** (negociação NAT/protocolo) → exceção "tempo real/essencial" | Inspeção; ver secção 6 | ◐ |
-| R-19 | 11.2.2.2 | 2.2.2 | Pausar, parar, ocultar | F-12 | Botão "Reduce animations" (`aria-pressed`) + preferência do SO; animações só existem durante estados reais | Testes "SO reduz movimento" e "botão para animações" | ✔ A |
-| R-20 | 11.2.3.1 | 2.3.1 | Três flashes | — | Os dígitos do rasto alternam a ~3,6 Hz mas ocupam píxeis minúsculos, muito abaixo da área-limite de flash | Análise de área (inspeção) | ✔ I |
+| R-19 | 11.2.2.2 | 2.2.2 | Pausar, parar, ocultar | F-12 | Só a preferência do SO. Animações em ciclo só existem durante estados reais (ligação, bytes a fluir). Sem mecanismo próprio na aplicação: quem não tiver a definição do SO ativa não consegue parar o movimento | Testes "SO reduz movimento" (pairing e rasto de bits) | ◐ |
+| R-20 | 11.2.3.1 | 2.3.1 | Três flashes | — | Os dígitos do rasto alternam entre ~4 e ~11 Hz (0,09–0,23 s por fase) mas cada um ocupa uns 3×5 píxeis, muito, muito abaixo da área-limite de flash | Análise de área (inspeção) | ✔ I |
 | R-21 | 11.2.4.1 | 2.4.1 | Contornar blocos | F-04 | Landmarks; vista única com poucos controlos | axe `region` = 0 | ✔ A |
 | R-22 | 11.2.4.2 | 2.4.2 | Página com título | F-07 | `document.title` distinto por ecrã | Teste "títulos distintos" (3/3) | ✔ A |
 | R-23 | 11.2.4.3 | 2.4.3 | Ordem do foco | F-08 | Foco movido para o novo ecrã; ordem = DOM | Teste "foco move-se para o novo ecrã" | ✔ A |
@@ -149,19 +149,20 @@ Testes referem-se a `scripts/a11y-audit.cjs` (axe = execução axe-core).
 
 ## 6. Itens em aberto e limitações
 
-1. **Leitores de ecrã reais (R-42, R-41).** Nenhum teste com NVDA/Narrator (WebView2), Orca (WebKitGTK/AT-SPI) ou VoiceOver (WKWebView). É o passo mais importante antes de afirmar conformidade.
-2. **Webview nativo.** Os testes correram em Chromium, não no webview do Wails; comportamento de foco e de `aria-live` pode diferir.
-3. **Cores forçadas / Alto Contraste do Windows (R-12, R-43).** Regra CSS adicionada, mas não verificada num SO com esse modo ativo.
-4. **Espaçamento de texto (R-13).** Não testado com folha de estilo de utilizador (1.4.12).
-5. **Seletor de ficheiros e pasta (nativo).** É fornecido pelo SO (`SelectFileNative`/`OpenFolder`); a sua acessibilidade não depende do FTU.
-6. **Barra de título nativa.** O título da janela (`pkg/ui/run.go`: "File Transfer Utility") é estático; o título dinâmico aplica-se ao documento web.
-7. **Limites de tempo (R-18).** 30 s para ligar e 120 s para aceitar são impostos pelo protocolo/NAT; estão justificados como tempo real, mas não são ajustáveis. Se vier a ser necessário, o limite de 30 s pode tornar-se configurável sem tocar na segurança.
-8. **Margem de contraste.** O par `--c-dim` sobre a linha ativa no tema escuro tem 4,51:1 (mínimo 4,5:1).
-9. **Teste com utilizadores.** Não realizado; a conformidade técnica não garante usabilidade para pessoas com deficiência.
+1. **Pausa de animações (R-19).** Removido o botão "Reduce animations": o critério 2.2.2 depende agora só da definição do sistema operativo. Se for preciso cumpri-lo sem essa definição, basta reintroduzir um interruptor que ative a mesma regra CSS.
+2. **Leitores de ecrã reais (R-42, R-41).** Nenhum teste com NVDA/Narrator (WebView2), Orca (WebKitGTK/AT-SPI) ou VoiceOver (WKWebView). É o passo mais importante antes de afirmar conformidade.
+3. **Webview nativo.** Os testes correram em Chromium, não no webview do Wails; comportamento de foco e de `aria-live` pode diferir.
+4. **Cores forçadas / Alto Contraste do Windows (R-12, R-43).** Regra CSS adicionada, mas não verificada num SO com esse modo ativo.
+5. **Espaçamento de texto (R-13).** Não testado com folha de estilo de utilizador (1.4.12).
+6. **Seletor de ficheiros e pasta (nativo).** É fornecido pelo SO (`SelectFileNative`/`OpenFolder`); a sua acessibilidade não depende do FTU.
+7. **Barra de título nativa.** O título da janela (`pkg/ui/run.go`: "File Transfer Utility") é estático; o título dinâmico aplica-se ao documento web.
+8. **Limites de tempo (R-18).** 30 s para ligar e 120 s para aceitar são impostos pelo protocolo/NAT; estão justificados como tempo real, mas não são ajustáveis. Se vier a ser necessário, o limite de 30 s pode tornar-se configurável sem tocar na segurança.
+9. **Margem de contraste.** O par `--c-dim` sobre a linha ativa no tema escuro tem 4,51:1 (mínimo 4,5:1).
+10. **Teste com utilizadores.** Não realizado; a conformidade técnica não garante usabilidade para pessoas com deficiência.
 
 ## 7. Manutenção
 
 - Antes de cada PR que mexa na UI: `npx tsc -b`, `npm run lint`, `npm run build` e `node scripts/a11y-audit.cjs` (esperado: **0 violações, 19/19 testes**).
 - Cores novas entram como tokens em `index.css` e devem ser acrescentadas à tabela da secção 4.
-- Qualquer animação nova em ciclo tem de ser desligada pela classe `html.reduce-motion` (regra `*` em `index.css`) e só correr enquanto houver um estado real a representar.
+- Qualquer animação nova em ciclo tem de parar com `prefers-reduced-motion` (regra `*` em `index.css`) e só correr enquanto houver um estado real a representar.
 - Texto novo usa `rem` (nunca `px`) e controlos novos usam `Button`/`IconButton`, que já trazem foco visível, alvo mínimo e estados desativados.
