@@ -40,7 +40,7 @@ function ActionCard({ icon: Icon, title, description, primary, onClick }: Action
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-lg font-bold">{title}</span>
-        <span className={`block text-sm ${primary ? 'text-on-primary/85' : 'text-muted'}`}>{description}</span>
+        <span className={`block text-sm ${primary ? 'text-on-primary' : 'text-muted'}`}>{description}</span>
       </span>
       <ArrowRight className="size-5 shrink-0 opacity-60 transition-transform group-hover:translate-x-1" aria-hidden />
     </button>
