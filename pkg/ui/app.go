@@ -376,7 +376,7 @@ func (a *App) SendSelectedFile(filePath string) error {
 	})
 
 	startTime := time.Now()
-	err = transfer.SendFile(file, conn)
+	err = transfer.SendFile(file, conn, a.newProgressEmitter(stats.Size()))
 	if err != nil {
 		wailsruntime.EventsEmit(a.ctx, EventTransferError, TransferErrorDTO{
 			Code:    "SEND_FAILED",

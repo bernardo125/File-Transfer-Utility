@@ -14,6 +14,36 @@ import (
 
 const transferBufferSize = 64 * 1024 // 64 KB chunk buffer
 
+// ProgressFunc receives the cumulative number of payload bytes moved so far.
+// It is invoked synchronously from the copy loop, so implementations must be cheap
+// (callers are expected to throttle any expensive work such as UI events).
+type ProgressFunc func(bytesDone int64)
+
+// progressReader counts bytes read from the underlying reader and reports them.
+// It only observes the stream; the bytes themselves are passed through untouched.
+type progressReader struct {
+	r    io.Reader
+	done int64
+	fn   ProgressFunc
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if n > 0 {
+		p.done += int64(n)
+		p.fn(p.done)
+	}
+	return n, err
+}
+
+// withProgress wraps r so that onProgress is notified as data flows. A nil callback returns r unchanged.
+func withProgress(r io.Reader, onProgress ProgressFunc) io.Reader {
+	if onProgress == nil {
+		return r
+	}
+	return &progressReader{r: r, fn: onProgress}
+}
+
 // SelectFileToSend opens a file for read-only access, extracts its metadata and SHA256 checksum,
 // and leaves the file pointer positioned at offset 0, ready to be transmitted.
 // The caller is responsible for closing the returned file.
@@ -51,7 +81,8 @@ func SelectFileToSend(filePath string) (file *os.File, stats os.FileInfo, hash s
 
 // SendFile streams the file content from disk to the QUIC stream in memory-efficient chunks.
 // unidirecional data stream (only for data tranfer)
-func SendFile(file *os.File, conn *quic.Conn) error {
+// onProgress is optional and reports bytes handed to the QUIC stream.
+func SendFile(file *os.File, conn *quic.Conn, onProgress ProgressFunc) error {
 	log.Println("[Transfer] Sending file payload to peer...")
 	dataStream, err := conn.OpenUniStream()
 	if err != nil {
@@ -60,7 +91,7 @@ func SendFile(file *os.File, conn *quic.Conn) error {
 	start := time.Now()
 
 	buf := make([]byte, transferBufferSize)
-	written, err := io.CopyBuffer(dataStream, file, buf)
+	written, err := io.CopyBuffer(dataStream, withProgress(file, onProgress), buf)
 	if err != nil {
 		return fmt.Errorf("error during file streaming: %w", err)
 	}
@@ -77,7 +108,8 @@ func SendFile(file *os.File, conn *quic.Conn) error {
 
 // ReceiveFile reads file payload from the QUIC stream, writes it to disk in chunks,
 // and validates its SHA256 checksum on-the-fly. If verification fails, the partial/corrupted file is deleted.
-func ReceiveFile(destPath string, conn *quic.Conn, expectedSize int64, expectedHash string) (int64, error) {
+// onProgress is optional and reports bytes received from the peer.
+func ReceiveFile(destPath string, conn *quic.Conn, expectedSize int64, expectedHash string, onProgress ProgressFunc) (int64, error) {
 	newFile, err := os.Create(destPath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create destination file: %w", err)
@@ -98,7 +130,7 @@ func ReceiveFile(destPath string, conn *quic.Conn, expectedSize int64, expectedH
 		src = io.LimitReader(dataStream, expectedSize)
 	}
 
-	written, err := io.CopyBuffer(writer, src, buf)
+	written, err := io.CopyBuffer(writer, withProgress(src, onProgress), buf)
 	if err != nil {
 		newFile.Close()
 		_ = os.Remove(destPath)

@@ -24,6 +24,7 @@ func (a *App) startReceiverLoop() {
 
 		stream, err := conn.AcceptStream(context.Background())
 		if err != nil {
+			a.notifyPeerLost(conn)
 			return
 		}
 
@@ -81,7 +82,7 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 	a.mu.Unlock()
 
 	start := time.Now()
-	written, err := transfer.ReceiveFile(destPath, conn, req.FileSize, req.FileHash)
+	written, err := transfer.ReceiveFile(destPath, conn, req.FileSize, req.FileHash, a.newProgressEmitter(req.FileSize))
 	if err != nil {
 		_ = protocol.SendCodeResponse(protocol.StatusConflict, controlStream)
 		wailsruntime.EventsEmit(a.ctx, EventTransferError, TransferErrorDTO{
