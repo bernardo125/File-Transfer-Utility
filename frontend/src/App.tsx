@@ -4,6 +4,7 @@ import { PairingScreen } from './screens/PairingScreen';
 import { TransferScreen } from './screens/TransferScreen';
 import { ThemeProvider } from './context/ThemeContext';
 import { SessionProvider } from './context/SessionContext';
+import { FloatingTools } from './components/layout/FloatingTools';
 import type { PeerRole, ViewMode } from './types/navigation';
 
 function AppContent() {
@@ -19,9 +20,12 @@ function AppContent() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {view === 'home' && <HomeScreen onStart={startPairing} />}
-      {view === 'pairing' && <PairingScreen role={role} onBack={goHome} onConnected={goTransfer} />}
-      {view === 'transfer' && <TransferScreen role={role} onExit={goHome} />}
+      <div key={view} className="anim-view-in flex min-h-0 flex-1 flex-col">
+        {view === 'home' && <HomeScreen onStart={startPairing} />}
+        {view === 'pairing' && <PairingScreen role={role} onBack={goHome} onConnected={goTransfer} />}
+        {view === 'transfer' && <TransferScreen role={role} onExit={goHome} />}
+      </div>
+      <FloatingTools />
     </div>
   );
 }

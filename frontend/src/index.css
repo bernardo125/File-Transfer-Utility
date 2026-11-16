@@ -16,57 +16,50 @@
 :root,
 html.dark {
   color-scheme: dark;
-  --c-bg: #111513;
-  --c-bg-glow: rgba(52, 184, 74, 0.07);
-  --c-surface: #181d1a;
-  --c-surface-2: #1f2521;
-  --c-inset: #0d100e;
-  --c-border: #2a322d;
-  --c-border-strong: #3a453e;
-  --c-fg: #e8eee9;
-  --c-muted: #a1aea6;
-  --c-dim: #7d8b83;
-  --c-accent: #3fbf54;          /* decorative + text on dark */
-  --c-accent-soft: rgba(63, 191, 84, 0.13);
-  --c-accent-ring: rgba(63, 191, 84, 0.45);
-  --c-primary: #1f8434;         /* button fill, AA with white text */
+  --c-bg: #1e1e20;
+  --c-surface: #252528;
+  --c-surface-2: #2c2c31;
+  --c-inset: #18181a;
+  --c-border: #38383e;
+  --c-border-strong: #4a4a52;
+  --c-fg: #f0f0f2;
+  --c-muted: #a3a3ab;
+  --c-dim: #8a8a94;
+  --c-accent: #3cb54f;          /* text/lines on dark */
+  --c-accent-soft: rgba(60, 181, 79, 0.14);
+  --c-primary: #1f8434;         /* fills; AA with white text */
   --c-primary-hover: #1a7230;
   --c-on-primary: #ffffff;
   --c-warn: #e5b23a;
-  --c-warn-soft: rgba(229, 178, 58, 0.13);
   --c-danger: #f26d6d;
   --c-danger-soft: rgba(242, 109, 109, 0.12);
-  --c-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -16px rgba(0, 0, 0, 0.7);
 }
 
 html.light {
   color-scheme: light;
-  --c-bg: #f3f5f3;
-  --c-bg-glow: rgba(31, 132, 52, 0.07);
+  --c-bg: #edeef2;
   --c-surface: #ffffff;
-  --c-surface-2: #f5f7f5;
-  --c-inset: #eef1ee;
-  --c-border: #dbe1dc;
-  --c-border-strong: #c3cbc5;
-  --c-fg: #131a15;
-  --c-muted: #4f5d54;
-  --c-dim: #66756b;
+  --c-surface-2: #f3f4f6;
+  --c-inset: #f8f9fa;
+  --c-border: #cfd2d8;
+  --c-border-strong: #b0b4be;
+  --c-fg: #18181b;
+  --c-muted: #52525b;
+  --c-dim: #6b6e78;
   --c-accent: #1d7b31;
   --c-accent-soft: rgba(31, 132, 52, 0.1);
-  --c-accent-ring: rgba(31, 132, 52, 0.4);
   --c-primary: #1f8434;
   --c-primary-hover: #1a7230;
   --c-on-primary: #ffffff;
   --c-warn: #9a6a00;
-  --c-warn-soft: rgba(196, 140, 10, 0.12);
   --c-danger: #c23131;
   --c-danger-soft: rgba(194, 49, 49, 0.09);
-  --c-shadow: 0 1px 2px rgba(16, 24, 18, 0.04), 0 12px 32px -18px rgba(16, 24, 18, 0.25);
 }
 
 @theme inline {
   --font-sans: 'Reddit Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
+  --radius-sm: 3px;
+  --radius-md: 4px;
 
   --color-bg: var(--c-bg);
   --color-surface: var(--c-surface);
@@ -83,11 +76,8 @@ html.light {
   --color-primary-hover: var(--c-primary-hover);
   --color-on-primary: var(--c-on-primary);
   --color-warn: var(--c-warn);
-  --color-warn-soft: var(--c-warn-soft);
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
-
-  --shadow-card: var(--c-shadow);
 }
 
 @layer base {
@@ -99,9 +89,7 @@ html.light {
 
   body {
     margin: 0;
-    background:
-      radial-gradient(1200px 500px at 50% -10%, var(--c-bg-glow), transparent 70%),
-      var(--c-bg);
+    background: var(--c-bg);
     color: var(--c-fg);
     font-family: var(--font-sans);
     overflow: hidden;
@@ -120,7 +108,6 @@ html.light {
   :focus-visible {
     outline: 2px solid var(--c-accent);
     outline-offset: 2px;
-    border-radius: 6px;
   }
 }
 
@@ -158,11 +145,35 @@ html.light {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes ftu-view-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes ftu-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes ftu-ripple {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes ftu-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
 
 .anim-hover { animation: ftu-hover 2.4s ease-in-out infinite; }
-.anim-pulse-ring { transform-box: fill-box; transform-origin: center; animation: ftu-pulse-ring 1.8s ease-out infinite; }
+.anim-pulse-ring { animation: ftu-pulse-ring 1.8s ease-out infinite; }
 .anim-dash { animation: ftu-dash 1.2s linear infinite; }
 .anim-fade-up { animation: ftu-fade-up 0.28s ease-out both; }
+.anim-view-in { animation: ftu-view-in 0.22s ease-out both; }
+.anim-pop { animation: ftu-pop 0.4s cubic-bezier(.3,.7,.4,1) both; }
+.anim-ripple { animation: ftu-ripple 0.9s ease-out 1 both; }
+.anim-shake { animation: ftu-shake 0.45s ease-in-out 1; }
 
 @media (prefers-reduced-motion: reduce) {
   *,
