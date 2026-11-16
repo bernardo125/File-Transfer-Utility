@@ -1,146 +1,140 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GetLocalToken, ConnectPeer, CancelConnection, CopyToClipboard } from '../wailsjs/go/ui/App';
-import { useWailsEvents } from '../hooks/useWailsEvents';
-import type { PairingMode } from '../types/navigation';
-import { ArrowLeft, Copy, Check, Clock, Link, X, AlertTriangle } from 'lucide-react';
-import pairing_logo from '../assets/photos/magpie-pairing.png'
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Download, Send } from 'lucide-react';
+import { CancelConnection, ConnectPeer, GetLocalToken } from '../wailsjs/go/ui/App';
+import { useSession } from '../context/SessionContext';
+import { useCountdown } from '../hooks/useCountdown';
+import { errorMessage } from '../lib/wails';
+import { AppHeader } from '../components/layout/AppHeader';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Notice } from '../components/ui/Notice';
+import { PairingVisual } from '../components/pairing/PairingVisual';
+import { TokenPanel } from '../components/pairing/TokenPanel';
+import { ConnectingPanel } from '../components/pairing/ConnectingPanel';
+import type { PeerRole } from '../types/navigation';
+
+const CONNECT_TIMEOUT_S = 30;
 
 interface PairingScreenProps {
-  initialMode: PairingMode;
-  onModeChange?: (m: PairingMode) => void;
+  role: PeerRole;
   onBack: () => void;
-  onConnected: (m: PairingMode) => void;
+  onConnected: () => void;
 }
 
-export const PairingScreen: React.FC<PairingScreenProps> = ({ initialMode,onBack, onConnected }) => {
-  const [mode] = useState<PairingMode>(initialMode);
+export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps) {
+  const { connection, connectionSuccess, connectionFailed, resetConnectionOutcome } = useSession();
   const [localToken, setLocalToken] = useState('');
-  const [remoteToken, setRemoteToken] = useState('');
   const [isLoadingToken, setIsLoadingToken] = useState(true);
-  const [isCopied, setIsCopied] = useState(false);
+  const [remoteToken, setRemoteToken] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
-  const [countdown, setCountdown] = useState(30);
   const [error, setError] = useState<string | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const { connectionSuccess, connectionFailed } = useWailsEvents();
 
-  const stopTimer = useCallback(() => {
-    if (timerRef.current !== null) { clearInterval(timerRef.current); timerRef.current = null; }
-  }, []);
+  const { remaining, start: startTimeout, stop: stopTimeout } = useCountdown(CONNECT_TIMEOUT_S, () => {
+    setIsConnecting(false);
+    setError(`Could not reach your peer within ${CONNECT_TIMEOUT_S} seconds. Check that both tokens are current and try again.`);
+    CancelConnection().catch(() => {});
+  });
 
   useEffect(() => {
-    setIsLoadingToken(true); setError(null);
-    GetLocalToken().then((t) => { setLocalToken(t); setIsLoadingToken(false); })
-      .catch((err) => { setIsLoadingToken(false); setError(`STUN ERROR: ${err instanceof Error ? err.message : String(err)}`); });
-    return () => stopTimer();
-  }, [stopTimer]);
+    let cancelled = false;
+    GetLocalToken()
+      .then((token) => !cancelled && setLocalToken(token))
+      .catch((err) => !cancelled && setError(`Could not discover your public address: ${errorMessage(err)}`))
+      .finally(() => !cancelled && setIsLoadingToken(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The backend's verdict for the current attempt. Success navigates away; failure is shown inline.
+  const failedReason = isConnecting && connectionFailed ? connectionFailed.reason || 'The connection failed.' : null;
+  const connecting = isConnecting && !failedReason;
+  const shownError = error ?? failedReason;
 
   useEffect(() => {
     if (!isConnecting) return;
-    if (connectionSuccess) { stopTimer(); setIsConnecting(false);onConnected(mode); }
-    else if (connectionFailed) { stopTimer(); setIsConnecting(false); setError(connectionFailed.reason || 'Connection failure'); }
-  }, [connectionSuccess, connectionFailed, isConnecting, stopTimer, onConnected,]);
+    if (connectionSuccess) {
+      stopTimeout();
+      onConnected();
+    } else if (connectionFailed) {
+      stopTimeout();
+    }
+  }, [connectionSuccess, connectionFailed, isConnecting, onConnected, stopTimeout]);
 
-  const handleCopy = async () => {
-    if (!localToken) return;
-    try { await CopyToClipboard(localToken); } catch { await navigator.clipboard?.writeText(localToken); }
-    setIsCopied(true); setTimeout(() => setIsCopied(false), 2000);
+  const dismissError = () => {
+    setError(null);
+    setIsConnecting(false);
   };
 
   const handleConnect = async () => {
-    const trimmed = remoteToken.trim();
-    if (!trimmed) return;
-    setError(null); setIsConnecting(true); setCountdown(30); stopTimer();
-    timerRef.current = window.setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          stopTimer(); setIsConnecting(false); setError('Time limit exceeded. Could not connect to the peer.');
-          CancelConnection().catch(() => {});
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    try { await ConnectPeer(trimmed); }
-    catch (err) { stopTimer(); setIsConnecting(false); setError(`Connect error: ${err instanceof Error ? err.message : String(err)}`); }
+    const token = remoteToken.trim();
+    if (!token) return;
+    stopTimeout();
+    setError(null);
+    resetConnectionOutcome();
+    setIsConnecting(true);
+    startTimeout();
+    try {
+      await ConnectPeer(token);
+    } catch (err) {
+      stopTimeout();
+      setIsConnecting(false);
+      setError(errorMessage(err));
+    }
   };
 
   const handleCancel = () => {
-    stopTimer(); setIsConnecting(false); CancelConnection().catch(() => {});
+    stopTimeout();
+    setIsConnecting(false);
+    CancelConnection().catch(() => {});
   };
 
+  const RoleIcon = role === 'send' ? Send : Download;
 
   return (
-    <div className="flex-1 flex flex-col justify-center p-6  w-full">
-      {/* Navigation & Mode Toggle */}
-      <div className=" absolute top-1 border-b border-[var(--border-subtle)]">
-        <button type="button" disabled={isConnecting} onClick={onBack}
-          className="h-7 px-2.5 rounded-[2px] bg-[var(--bg-panel)] hover:bg-[var(--bg-panel-hover)] disabled:opacity-40 border border-[var(--border-app)] text-xs flex items-center gap-1.5 cursor-pointer">
-          <ArrowLeft className="w-4.5 h-4.5" /><span>Back</span>
-        </button>
-      </div>
-
-      {/* Two-Column Layout */}
-      <div className="grid md:grid-cols-2 gap-2 items-center">
-          {/* Left: Graphic Placeholder (continuous 2s 360-deg rotation during connection) */}
-          <div className="flex flex-col items-center justify-center p-4">
-            <img src={pairing_logo} alt="Logo" className={`w-80 h-80 flex flex-col items-center justify-center ${isConnecting ? 'animate-rotate-2s' : ''}`}/>
+    <>
+      <AppHeader
+        leading={
+          <Button variant="ghost" size="sm" icon={ArrowLeft} disabled={connecting} onClick={onBack}>
+            Back
+          </Button>
+        }
+        center={
+          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-fg">
+            <RoleIcon className="size-3.5 text-accent" aria-hidden />
+            {role === 'send' ? 'Sending' : 'Receiving'} · Pair with your peer
+          </span>
+        }
+      />
+      <main className="flex flex-1 items-center justify-center overflow-y-auto px-6 py-8">
+        <Card className="anim-fade-up grid w-full max-w-3xl items-center gap-8 p-8 md:grid-cols-[240px_1fr]">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <PairingVisual countdown={connecting ? { remaining, total: CONNECT_TIMEOUT_S } : undefined} />
+            <p className="max-w-[220px] text-xs text-dim">
+              Tokens are exchanged by you, not by a server. Both peers connect directly.
+            </p>
           </div>
 
-        {/* Right: State A (Tokens) or State B (Connecting) */}
-        <div>
-          {error && (
-            <div className="mb-3 p-2.5 rounded-[3px] bg-rose-950/40 border border-rose-800/60 text-rose-200 text-xs flex items-center justify-between">
-              <div className="flex items-center gap-2 truncate">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" /><span className="truncate">{error}</span>
-              </div>
-              <button type="button" onClick={() => setError(null)} className="text-rose-400 hover:text-rose-200 ml-2 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
-            </div>
-          )}
-
-          {!isConnecting ? (
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] p-4 space-y-3 shadow-xs">
-              <div>
-                <div className="mb-1">
-                  <span className="text-[11px] text-[var(--text-muted)] uppercase">Your token</span>
-                </div>
-                <div className="bg-[var(--bg-inset)] border border-[var(--border-app)] rounded-[3px] p-2 text-xs break-all select-all min-h-[44px] max-h-16 overflow-y-auto">
-                  {isLoadingToken ? 'Getting token...' : localToken || 'None'}
-                </div>
-                <button type="button" disabled={isLoadingToken || !localToken} onClick={handleCopy}
-                  className="mt-1.5 h-6 px-2.5 rounded-[2px] bg-[var(--bg-panel-hover)] hover:bg-[var(--border-app)] disabled:opacity-40 text-[11px] border border-[var(--border-subtle)] flex items-center gap-1 cursor-pointer">
-                  {isCopied ? <Check className="w-3 h-3 text-[#2fa340]" /> : <Copy className="w-3 h-3 text-[var(--text-muted)]" />}
-                  <span>{isCopied ? 'Copied!' : 'Copy Token'}</span>
-                </button>
-              </div>
-
-              <div>
-                <textarea value={remoteToken} onChange={(e) => setRemoteToken(e.target.value)}
-                  placeholder="Paste your friend's token here..." rows={2}
-                  className="w-full bg-[var(--bg-inset)] border border-[var(--border-app)] focus:border-[#2fa340] rounded-[3px] p-2 text-xs focus:outline-none resize-none transition-colors" />
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <button type="button" disabled={isLoadingToken || !remoteToken.trim()} onClick={handleConnect}
-                  className="h-8 px-5 rounded-[3px] bg-[#2fa340] hover:bg-[#288d37] active:bg-[#1f752c] disabled:opacity-40 text-white text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
-                  <Link className="w-3 h-3" /><span>Connect</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-[var(--bg-panel)] border border-[var(--border-app)] rounded-[4px] p-6 flex flex-col items-center space-y-4 shadow-xs text-center">
-              <div className="py-3 px-6 rounded-[3px] bg-[var(--bg-inset)] border border-[var(--border-subtle)] flex flex-col items-center">
-                <span className="text-[10px] text-[var(--text-dim)] flex items-center gap-1 mb-0.5"><Clock className="w-3 h-3 text-[#2fa340]" />TIMEOUT</span>
-                <span className="text-4xl text-[#2fa340] tracking-widest">00:{countdown < 10 ? `0${countdown}` : countdown}</span>
-              </div>
-              <button type="button" onClick={handleCancel}
-                className="h-8 px-6 rounded-[3px] bg-[var(--bg-inset)] hover:text-rose-400 hover:border-rose-800/60 border border-[var(--border-app)] text-xs uppercase cursor-pointer flex items-center gap-1.5">
-                <X className="w-3.5 h-3.5" /><span>Cancel</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+          <div className="flex min-w-0 flex-col gap-4">
+            {shownError && (
+              <Notice tone="error" onDismiss={dismissError}>
+                {shownError}
+              </Notice>
+            )}
+            {connecting ? (
+              <ConnectingPanel state={connection.state} detail={connection.detail} onCancel={handleCancel} />
+            ) : (
+              <TokenPanel
+                localToken={localToken}
+                isLoadingToken={isLoadingToken}
+                remoteToken={remoteToken}
+                onRemoteTokenChange={setRemoteToken}
+                onConnect={handleConnect}
+              />
+            )}
+          </div>
+        </Card>
+      </main>
+    </>
   );
-};
+}
