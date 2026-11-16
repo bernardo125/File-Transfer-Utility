@@ -106,7 +106,7 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
           </span>
         }
       />
-      <main className="flex flex-1 items-center justify-center overflow-y-auto px-6 py-8">
+      <main className="flex flex-1 items-center justify-center overflow-y-auto px-6 pb-8 pt-14">
         <Panel title={connecting ? 'Connecting to peer' : 'Pair with your peer'} className="w-full max-w-3xl">
           <div className="grid items-center gap-6 md:grid-cols-[220px_1fr]">
           <div className="flex flex-col items-center gap-3 p-5 pr-0 text-center max-md:pr-5">

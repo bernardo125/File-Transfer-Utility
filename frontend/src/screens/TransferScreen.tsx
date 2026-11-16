@@ -54,7 +54,7 @@ export function TransferScreen({ role, onExit }: TransferScreenProps) {
         }
         center={<ConnectionIndicator state={connection.state} rttMs={connection.rttMs} />}
       />
-      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-4">
+      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-4 pt-12">
         <div className="flex w-full max-w-3xl flex-col items-center gap-4">
           <FlightPath role={role} phase={phase} fraction={fraction} />
 

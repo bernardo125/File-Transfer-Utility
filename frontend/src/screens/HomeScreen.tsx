@@ -3,7 +3,6 @@ import { ArrowRight, Download, LogOut, Send, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { QuitApplication } from '../wailsjs/go/ui/App';
 import { hasBackendMethod } from '../lib/wails';
-import { AppHeader } from '../components/layout/AppHeader';
 import { BrandMark } from '../components/common/BrandMark';
 import { Button } from '../components/ui/Button';
 import type { PeerRole } from '../types/navigation';
@@ -60,10 +59,9 @@ export function HomeScreen({ onStart }: HomeScreenProps) {
 
   return (
     <>
-      <AppHeader />
       <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8">
         <div className="flex w-full max-w-xl flex-col items-center gap-7">
-          <BrandMark size="lg" />
+          <BrandMark />
 
           <div className="flex w-full flex-col gap-3 sm:flex-row">
             <ActionCard primary icon={Send} title="Send" description="Throw a file to a peer" onClick={() => onStart('send')} />
