@@ -1,4 +1,5 @@
 import logo from '../../assets/photos/magpie.webp';
+import mark from '../../assets/photos/magpie-pairing.webp';
 
 interface BrandMarkProps {
   size?: 'sm' | 'lg';
@@ -17,7 +18,7 @@ export function BrandMark({ size = 'sm' }: BrandMarkProps) {
   }
   return (
     <div className="flex items-center gap-2">
-      <img src={logo} alt="" width={720} height={443} className="h-6 w-auto" />
+      <img src={mark} alt="" width={359} height={360} className="size-7" />
       <span className="text-sm font-bold tracking-tight text-fg">File Throw</span>
     </div>
   );

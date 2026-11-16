@@ -12,6 +12,9 @@ interface PhaseInput {
 
 /** Maps backend transfer status (plus local sender intent) to a single UI phase. */
 export function deriveTransferPhase({ role, status, hasSelectedFile, hasIncoming, hasCompleted, hasError }: PhaseInput): TransferPhase {
+  // On the sending side every phase belongs to the file this peer picked; events without one
+  // (e.g. an offer arriving from the other peer) must not move the sender's screen.
+  if (role === 'send' && !hasSelectedFile) return 'idle';
   if (hasCompleted || status === 'completed') return 'completed';
   if (hasError || status === 'error') return 'failed';
   if (status === 'rejected') return 'declined';
@@ -20,7 +23,7 @@ export function deriveTransferPhase({ role, status, hasSelectedFile, hasIncoming
 
   if (role === 'send') {
     if (status === 'waiting_approval' || status === 'requesting') return 'awaiting';
-    return hasSelectedFile ? 'preparing' : 'idle';
+    return 'preparing';
   }
   return hasIncoming || status === 'waiting_approval' ? 'deciding' : 'idle';
 }

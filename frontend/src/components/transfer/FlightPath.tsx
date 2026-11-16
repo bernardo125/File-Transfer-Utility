@@ -122,7 +122,7 @@ export function FlightPath({ role, phase, fraction }: FlightPathProps) {
   const moving = phase === 'transferring' && fraction !== null;
 
   return (
-    <div className="relative mx-auto w-full max-w-[600px]" style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }} aria-hidden>
+    <div className="relative mx-auto w-full max-w-[min(600px,76vh)]" style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }} aria-hidden>
       <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="absolute inset-0 size-full overflow-visible">
         {/* Route */}
         <path

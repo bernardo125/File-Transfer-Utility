@@ -16,7 +16,7 @@ export function TransferActions({ role, controller }: TransferActionsProps) {
 
   if (sending && (phase === 'idle' || phase === 'declined' || phase === 'failed')) {
     return (
-      <Button variant="primary" size="lg" icon={phase === 'idle' ? Upload : Plus} loading={isPicking} onClick={chooseFile} autoFocus>
+      <Button variant="primary" size="lg" icon={phase === 'idle' ? Upload : Plus} loading={isPicking} onClick={chooseFile}>
         {phase === 'idle' ? 'Choose a file' : 'Choose another file'}
       </Button>
     );
@@ -24,7 +24,7 @@ export function TransferActions({ role, controller }: TransferActionsProps) {
 
   if (sending && phase === 'completed') {
     return (
-      <Button variant="primary" size="lg" icon={Plus} loading={isPicking} onClick={chooseFile} autoFocus>
+      <Button variant="primary" size="lg" icon={Plus} loading={isPicking} onClick={chooseFile}>
         Send another file
       </Button>
     );
@@ -36,7 +36,7 @@ export function TransferActions({ role, controller }: TransferActionsProps) {
         <Button variant="danger" size="lg" icon={X} disabled={isResponding} onClick={() => respond(false)}>
           Decline
         </Button>
-        <Button variant="primary" size="lg" icon={Check} loading={isResponding} onClick={() => respond(true)} autoFocus>
+        <Button variant="primary" size="lg" icon={Check} loading={isResponding} onClick={() => respond(true)}>
           Accept file
         </Button>
       </div>
@@ -49,7 +49,7 @@ export function TransferActions({ role, controller }: TransferActionsProps) {
         <Button variant="secondary" size="lg" onClick={startOver}>
           Done
         </Button>
-        <Button variant="primary" size="lg" icon={FolderOpen} onClick={() => OpenFolder(completed.destPath).catch(() => {})} autoFocus>
+        <Button variant="primary" size="lg" icon={FolderOpen} onClick={() => OpenFolder(completed.destPath).catch(() => {})}>
           Show in folder
         </Button>
       </div>
@@ -58,7 +58,7 @@ export function TransferActions({ role, controller }: TransferActionsProps) {
 
   if (!sending && (phase === 'declined' || phase === 'failed')) {
     return (
-      <Button variant="secondary" size="lg" onClick={startOver} autoFocus>
+      <Button variant="secondary" size="lg" onClick={startOver}>
         Wait for another file
       </Button>
     );
