@@ -6,7 +6,7 @@ import { useCountdown } from '../hooks/useCountdown';
 import { errorMessage } from '../lib/wails';
 import { AppHeader } from '../components/layout/AppHeader';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { Panel } from '../components/ui/Panel';
 import { Notice } from '../components/ui/Notice';
 import { PairingVisual } from '../components/pairing/PairingVisual';
 import { TokenPanel } from '../components/pairing/TokenPanel';
@@ -100,22 +100,23 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
           </Button>
         }
         center={
-          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold text-fg">
+          <span className="inline-flex items-center gap-2 rounded-sm border border-line bg-inset px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-fg">
             <RoleIcon className="size-3.5 text-accent" aria-hidden />
             {role === 'send' ? 'Sending' : 'Receiving'} · Pair with your peer
           </span>
         }
       />
       <main className="flex flex-1 items-center justify-center overflow-y-auto px-6 py-8">
-        <Card className="anim-fade-up grid w-full max-w-3xl items-center gap-8 p-8 md:grid-cols-[240px_1fr]">
-          <div className="flex flex-col items-center gap-4 text-center">
+        <Panel title={connecting ? 'Connecting to peer' : 'Pair with your peer'} className="w-full max-w-3xl">
+          <div className="grid items-center gap-6 md:grid-cols-[220px_1fr]">
+          <div className="flex flex-col items-center gap-3 p-5 pr-0 text-center max-md:pr-5">
             <PairingVisual countdown={connecting ? { remaining, total: CONNECT_TIMEOUT_S } : undefined} />
-            <p className="max-w-[220px] text-xs text-dim">
+            <p className="max-w-[200px] text-[11px] text-dim">
               Tokens are exchanged by you, not by a server. Both peers connect directly.
             </p>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-3 p-5 pl-0 max-md:pl-5 max-md:pt-0">
             {shownError && (
               <Notice tone="error" onDismiss={dismissError}>
                 {shownError}
@@ -133,7 +134,8 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
               />
             )}
           </div>
-        </Card>
+          </div>
+        </Panel>
       </main>
     </>
   );

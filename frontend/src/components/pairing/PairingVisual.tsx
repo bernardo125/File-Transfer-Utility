@@ -8,33 +8,37 @@ interface PairingVisualProps {
   countdown?: { remaining: number; total: number };
 }
 
-/** The magpie waiting to pair; while connecting, a timeout ring counts down around it. */
+/** The magpie; while connecting, a ring around it drains with the real timeout. */
 export function PairingVisual({ countdown }: PairingVisualProps) {
-  const fraction = countdown ? countdown.remaining / countdown.total : 1;
+  const fraction = countdown ? Math.max(0, countdown.remaining) / countdown.total : 1;
 
   return (
-    <div className="relative flex aspect-square w-full max-w-[240px] items-center justify-center">
-      <svg viewBox="0 0 200 200" className="absolute inset-0 size-full -rotate-90" aria-hidden>
-        <circle cx="100" cy="100" r={RADIUS} fill="var(--c-surface)" stroke="var(--c-border)" strokeWidth="3" />
-        {countdown && (
-          <circle
-            cx="100"
-            cy="100"
-            r={RADIUS}
-            fill="none"
-            stroke="var(--c-accent)"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={CIRCUMFERENCE * (1 - fraction)}
-            style={{ transition: 'stroke-dashoffset 1s linear' }}
-          />
-        )}
+    <div className="relative flex aspect-square w-full max-w-[220px] items-center justify-center">
+      <svg viewBox="0 0 200 200" className={`absolute inset-0 size-full -rotate-90 transition-opacity duration-300 ${countdown ? 'opacity-100' : 'opacity-0'}`} aria-hidden>
+        <circle cx="100" cy="100" r={RADIUS} fill="none" stroke="var(--c-border)" strokeWidth="2" />
+        <circle
+          cx="100"
+          cy="100"
+          r={RADIUS}
+          fill="none"
+          stroke="var(--c-accent)"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={CIRCUMFERENCE}
+          strokeDashoffset={CIRCUMFERENCE * (1 - fraction)}
+          style={{ transition: 'stroke-dashoffset 1s linear' }}
+        />
       </svg>
-      <img src={pairingBird} alt="" width={359} height={360} className={`relative w-[58%] ${countdown ? 'anim-hover' : ''}`} />
+      <img
+        src={pairingBird}
+        alt=""
+        width={359}
+        height={360}
+        className={`relative transition-[width] duration-500 ease-out ${countdown ? 'anim-hover w-[56%]' : 'w-[72%]'}`}
+      />
       {countdown && (
         <span
-          className="absolute bottom-4 rounded-full border border-line bg-surface px-2.5 py-0.5 font-mono text-xs tabular-nums text-muted"
+          className="absolute bottom-3 rounded-sm border border-line bg-surface px-2 py-0.5 text-[11px] font-semibold tabular-nums text-muted"
           role="timer"
           aria-label={`${countdown.remaining} seconds before the attempt times out`}
         >

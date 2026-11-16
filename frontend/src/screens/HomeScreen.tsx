@@ -25,24 +25,18 @@ function ActionCard({ icon: Icon, title, description, primary, onClick }: Action
     <button
       type="button"
       onClick={onClick}
-      className={`group flex flex-1 items-center gap-4 rounded-2xl border p-5 text-left transition-[border-color,background-color,transform,box-shadow] duration-200 cursor-pointer hover:-translate-y-0.5 ${
+      className={`group flex flex-1 items-center gap-3 rounded-md border px-4 py-3.5 text-left transition-colors cursor-pointer ${
         primary
-          ? 'border-primary bg-primary text-on-primary shadow-[0_14px_30px_-14px_var(--c-primary)] hover:bg-primary-hover'
-          : 'border-line bg-surface text-fg shadow-card hover:border-accent/60'
+          ? 'border-primary-hover bg-primary text-on-primary hover:bg-primary-hover'
+          : 'border-line-strong bg-surface text-fg hover:border-accent hover:bg-surface-2'
       }`}
     >
-      <span
-        className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${
-          primary ? 'bg-white/15' : 'bg-accent-soft text-accent'
-        }`}
-      >
-        <Icon className="size-6" aria-hidden />
-      </span>
+      <Icon className={`size-5 shrink-0 ${primary ? '' : 'text-accent'}`} aria-hidden />
       <span className="min-w-0 flex-1">
-        <span className="block text-lg font-bold">{title}</span>
-        <span className={`block text-sm ${primary ? 'text-on-primary' : 'text-muted'}`}>{description}</span>
+        <span className="block text-sm font-semibold uppercase tracking-wider">{title}</span>
+        <span className={`block text-xs ${primary ? 'text-on-primary' : 'text-muted'}`}>{description}</span>
       </span>
-      <ArrowRight className="size-5 shrink-0 opacity-60 transition-transform group-hover:translate-x-1" aria-hidden />
+      <ArrowRight className="size-4 shrink-0 opacity-60 transition-transform duration-200 group-hover:translate-x-1 group-focus-visible:translate-x-1" aria-hidden />
     </button>
   );
 }
@@ -68,7 +62,7 @@ export function HomeScreen({ onStart }: HomeScreenProps) {
     <>
       <AppHeader />
       <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8">
-        <div className="anim-fade-up flex w-full max-w-2xl flex-col items-center gap-10">
+        <div className="flex w-full max-w-xl flex-col items-center gap-7">
           <BrandMark size="lg" />
 
           <div className="flex w-full flex-col gap-3 sm:flex-row">
@@ -76,9 +70,9 @@ export function HomeScreen({ onStart }: HomeScreenProps) {
             <ActionCard icon={Download} title="Receive" description="Catch a file from a peer" onClick={() => onStart('receive')} />
           </div>
 
-          <div className="flex w-full flex-wrap items-center justify-between gap-3 text-xs text-dim">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[11px] text-dim">
             <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="size-4 text-accent" aria-hidden />
+              <ShieldCheck className="size-3.5 text-accent" aria-hidden />
               Encrypted QUIC (TLS 1.3) · Ed25519 peer identity · SHA-256 verified
             </span>
             <Button variant="ghost" size="sm" icon={LogOut} loading={isExiting} onClick={handleExit}>
