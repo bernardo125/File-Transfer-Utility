@@ -109,7 +109,7 @@ Testes referem-se a `scripts/a11y-audit.cjs` (axe = execução axe-core).
 | R-17 | 11.2.1.4 | 2.1.4 | Atalhos de tecla única | — | Não existem atalhos | Inspeção | N/A |
 | R-18 | 11.2.2.1 | 2.2.1 | Tempo ajustável | — | Existem limites: 30 s para ligar e 120 s para aceitar (backend). São de **tempo real** (negociação NAT/protocolo) → exceção "tempo real/essencial" | Inspeção; ver secção 6 | ◐ |
 | R-19 | 11.2.2.2 | 2.2.2 | Pausar, parar, ocultar | F-12 | Só a preferência do SO. Animações em ciclo só existem durante estados reais (ligação, bytes a fluir). Sem mecanismo próprio na aplicação: quem não tiver a definição do SO ativa não consegue parar o movimento | Testes "SO reduz movimento" (pairing e rasto de bits) | ◐ |
-| R-20 | 11.2.3.1 | 2.3.1 | Três flashes | — | Os dígitos do rasto alternam entre ~4 e ~11 Hz (0,09–0,23 s por fase) mas cada um ocupa uns 3×5 píxeis, muito, muito abaixo da área-limite de flash | Análise de área (inspeção) | ✔ I |
+| R-20 | 11.2.3.1 | 2.3.1 | Três flashes | — | Os dígitos do rasto alternam entre ~4 e ~11 Hz (0,09–0,23 s por fase) mas cada um ocupa uns 3×5 píxeis, bem abaixo da área-limite de flash (estimativa por inspeção, sem medição com ferramenta de flashes) | Análise de área (inspeção) | ◐ |
 | R-21 | 11.2.4.1 | 2.4.1 | Contornar blocos | F-04 | Landmarks; vista única com poucos controlos | axe `region` = 0 | ✔ A |
 | R-22 | 11.2.4.2 | 2.4.2 | Página com título | F-07 | `document.title` distinto por ecrã | Teste "títulos distintos" (3/3) | ✔ A |
 | R-23 | 11.2.4.3 | 2.4.3 | Ordem do foco | F-08 | Foco movido para o novo ecrã; ordem = DOM | Teste "foco move-se para o novo ecrã" | ✔ A |
