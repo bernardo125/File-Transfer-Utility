@@ -1,61 +1,56 @@
-import React, { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HomeScreen } from './screens/HomeScreen';
 import { PairingScreen } from './screens/PairingScreen';
 import { TransferScreen } from './screens/TransferScreen';
-import { ThemeProvider, useTheme } from './context/ThemeContext';
-import type { ViewMode, PairingMode } from './types/navigation';
-import { ThemeSwitcher } from './components/common/ThemeSwitcher';
-import { GitHubButton } from './components/common/GitHubButton';
+import { ThemeProvider } from './context/ThemeContext';
+import { useDocumentTitle } from './hooks/useDocumentTitle';
+import { SessionProvider } from './context/SessionContext';
+import { FloatingTools } from './components/layout/FloatingTools';
+import type { PeerRole, ViewMode } from './types/navigation';
 
-const AppContent: React.FC = () => {
-  const [currentView, setCurrentView] = useState<ViewMode>('home');
-  const [pairingMode, setPairingMode] = useState<PairingMode>('send');
-  const { theme, toggleTheme } = useTheme();
+function AppContent() {
+  const [view, setView] = useState<ViewMode>('home');
+  const [role, setRole] = useState<PeerRole>('send');
 
-  const handleNavigate = (view: ViewMode, mode?: PairingMode) => {
-    if (mode) setPairingMode(mode);
-    setCurrentView(view);
-  };
+  const startPairing = useCallback((nextRole: PeerRole) => {
+    setRole(nextRole);
+    setView('pairing');
+  }, []);
+  const goHome = useCallback(() => setView('home'), []);
+  const goTransfer = useCallback(() => setView('transfer'), []);
+
+  const screenTitle = view === 'home' ? undefined : view === 'pairing' ? 'Pair with your peer' : role === 'send' ? 'Sending' : 'Receiving';
+  useDocumentTitle(screenTitle);
+
+  // Move focus to the new screen so keyboard and screen-reader users start at its top (WCAG 2.4.3).
+  const viewRef = useRef<HTMLDivElement>(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    viewRef.current?.focus({ preventScroll: true });
+  }, [view]);
 
   return (
-    <div className="w-full h-screen flex flex-col relative overflow-hidden">
-      {/* Github and Theme Switcher Buttons */}
-      <div className="absolute bottom-3 z-[9999] left-1 flex gap-3 ">
-        <GitHubButton />
-        <ThemeSwitcher theme={theme} onClick={toggleTheme}/>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div key={view} ref={viewRef} tabIndex={-1} className="anim-view-in relative flex min-h-0 flex-1 flex-col outline-none">
+        {view === 'home' && <HomeScreen onStart={startPairing} />}
+        {view === 'pairing' && <PairingScreen role={role} onBack={goHome} onConnected={goTransfer} />}
+        {view === 'transfer' && <TransferScreen role={role} onExit={goHome} />}
       </div>
-      {/* Main View Router */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        {currentView === 'home' && (
-          <HomeScreen onNavigate={handleNavigate} />
-        )}
-
-        {currentView === 'pairing' && (
-          <PairingScreen
-            initialMode={pairingMode}
-            onModeChange={(newMode) => setPairingMode(newMode)}
-            onBack={() => setCurrentView('home')}
-            onConnected={(connectedMode) => setCurrentView(connectedMode)}
-          />
-        )}
-
-        {(currentView === 'send' || currentView === 'receive') && (
-          <TransferScreen
-            role={currentView}
-            onBack={() => setCurrentView('home')}
-          />
-        )}
-      </main>
+      <FloatingTools />
     </div>
   );
-};
+}
 
-export const App: React.FC = () => {
+export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <SessionProvider>
+        <AppContent />
+      </SessionProvider>
     </ThemeProvider>
   );
-};
-
-export default App;
+}

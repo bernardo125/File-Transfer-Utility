@@ -136,6 +136,10 @@ export function initWailsMock(): void {
       ConnectPeer: async (token: unknown) => {
         console.info('[Wails Mock] ConnectPeer called with token:', token);
         // Simulate async UDP hole punch and QUIC upgrade (completes in 2.5s)
+        w.runtime?.EventsEmit?.('p2p:connection-state', { state: 'hole_punching', detail: 'Punching through NAT (mock)' });
+        setTimeout(() => {
+          w.runtime?.EventsEmit?.('p2p:connection-state', { state: 'upgrading', detail: 'QUIC/TLS handshake (mock)' });
+        }, 1200);
         setTimeout(() => {
           w.runtime?.EventsEmit?.('connection:success', {
             addr: '192.168.1.100:48234',
@@ -231,14 +235,15 @@ export function initWailsMock(): void {
                 speedMBs: 42.5,
                 etaSeconds: 0,
               });
-              w.runtime?.EventsEmit?.('transfer:completed', {
+              w.runtime?.EventsEmit?.('transfer:status', 'verifying');
+              setTimeout(() => w.runtime?.EventsEmit?.('transfer:completed', {
                 fileName: 'document_sample.zip',
                 destPath: '/home/user/Downloads/document_sample.zip',
                 fileSize: totalBytes,
                 durationSec: 1.25,
                 speedMBs: 42.5,
                 hashVerified: true,
-              });
+              }), 800);
             } else {
               w.runtime?.EventsEmit?.('transfer:progress', {
                 bytesTransferred: Math.round((totalBytes * currentPct) / 100),
@@ -297,8 +302,8 @@ export function initWailsMock(): void {
     // Auto-trigger an incoming proposal for receiver in browser mock after connection
     setTimeout(() => {
       w.runtime?.EventsEmit?.('transfer:incoming', {
-        fileName: 'sample_archive_package.zip',
-        fileSize: 48576000,
+        fileName: 'document_sample.zip',
+        fileSize: 14857600,
         fileHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
       });
     }, 4000);

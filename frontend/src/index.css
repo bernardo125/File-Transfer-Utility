@@ -8,128 +8,228 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'Reddit Sans';
-  src: url('./assets/Reddit_Sans/RedditSans-Italic-VariableFont_wght.ttf') format('truetype');
-  font-weight: 200 900;
-  font-style: italic;
-  font-display: swap;
-}
-
-
-:root {
-  --font-sans: 'Reddit Sans', -apple-system, BlinkMacSystemFont, Roboto, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'Consolas', 'Fira Code', 'Courier New', monospace;
-  
-  /* Default: Dark Gray Mode (µTorrent desktop inspired) */
-  --bg-app: #1e1e20;
-  --bg-panel: #252528;
-  --bg-panel-hover: #2c2c31;
-  --bg-inset: #18181a;
-  --border-app: #38383e;
-  --border-subtle: #2b2b30;
-  --border-highlight: #4a4a52;
-  --text-main: #f0f0f2;
-  --text-muted: #9c9ca4;
-  --text-dim: #6e6e78;
-  
-  /* Iconic µTorrent Green */
-  --green-utorrent: #2fa340;
-  --green-utorrent-hover: #288d37;
-  --green-utorrent-active: #1f752c;
-  --green-utorrent-border: #278535;
-  --green-utorrent-light: rgba(47, 163, 64, 0.15);
-  
-  /* Status Colors */
-  --status-ok: #2fa340;
-  --status-warn: #eab308;
-  --status-err: #ef4444;
+/*
+ * Design tokens. Colours are defined once per theme as CSS variables and exposed to
+ * Tailwind through @theme, so components use semantic utilities (bg-surface, text-muted…).
+ * The FTU green is kept from the prototype and tuned per theme for WCAG AA contrast.
+ */
+:root,
+html.dark {
+  color-scheme: dark;
+  --c-bg: #1e1e20;
+  --c-surface: #252528;
+  --c-surface-2: #2c2c31;
+  --c-inset: #18181a;
+  --c-border: #38383e;
+  --c-border-strong: #4a4a52;
+  --c-fg: #f0f0f2;
+  --c-muted: #adadb5;
+  --c-dim: #9c9ca6;
+  --c-control: #787882;       /* boundary of inputs/bars: >= 3:1 (WCAG 1.4.11) */
+  --c-accent: #3cb54f;          /* text/lines on dark */
+  --c-accent-soft: rgba(60, 181, 79, 0.14);
+  --c-primary: #1f8434;         /* fills; AA with white text */
+  --c-primary-hover: #1a7230;
+  --c-on-primary: #ffffff;
+  --c-warn: #e5b23a;
+  --c-danger: #f26d6d;
+  --c-danger-soft: rgba(242, 109, 109, 0.12);
+  --c-danger-fill: #b3261e;      /* fill behind white text */
+  --c-bit-a: #6a9ad6;
+  --c-bit-b: #a39489;
 }
 
 html.light {
-  /* Classic Desktop Light Gray Mode */
-  --bg-app: #edeef2;
-  --bg-panel: #ffffff;
-  --bg-panel-hover: #f3f4f6;
-  --bg-inset: #f8f9fa;
-  --border-app: #cfd2d8;
-  --border-subtle: #e2e4e8;
-  --border-highlight: #b0b4be;
-  --text-main: #18181b;
-  --text-muted: #52525b;
-  --text-dim: #8b8e98;
-  
-  --green-utorrent: #2fa340;
-  --green-utorrent-hover: #288d37;
-  --green-utorrent-active: #1f752c;
-  --green-utorrent-border: #278535;
-  --green-utorrent-light: rgba(47, 163, 64, 0.12);
+  color-scheme: light;
+  --c-bg: #edeef2;
+  --c-surface: #ffffff;
+  --c-surface-2: #f3f4f6;
+  --c-inset: #f8f9fa;
+  --c-border: #cfd2d8;
+  --c-border-strong: #b0b4be;
+  --c-fg: #18181b;
+  --c-muted: #4a4a53;
+  --c-dim: #5a5e6c;
+  --c-control: #868b99;
+  --c-accent: #1d7b31;
+  --c-accent-soft: rgba(31, 132, 52, 0.1);
+  --c-primary: #1f8434;
+  --c-primary-hover: #1a7230;
+  --c-on-primary: #ffffff;
+  --c-warn: #9a6a00;
+  --c-danger: #c23131;
+  --c-danger-soft: rgba(194, 49, 49, 0.09);
+  --c-danger-fill: #b3261e;
+  --c-bit-a: #2f6aa8;
+  --c-bit-b: #7d6f66;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  user-select: none;
+@theme inline {
+  --font-sans: 'Reddit Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-inset: var(--c-inset);
+  --color-line: var(--c-border);
+  --color-line-strong: var(--c-border-strong);
+  --color-control: var(--c-control);
+  --color-fg: var(--c-fg);
+  --color-muted: var(--c-muted);
+  --color-dim: var(--c-dim);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-primary: var(--c-primary);
+  --color-primary-hover: var(--c-primary-hover);
+  --color-on-primary: var(--c-on-primary);
+  --color-warn: var(--c-warn);
+  --color-danger: var(--c-danger);
+  --color-danger-soft: var(--c-danger-soft);
+  --color-danger-fill: var(--c-danger-fill);
 }
 
-body {
-  background-color: var(--bg-app);
-  color: var(--text-main);
-  font-family: var(--font-sans);
-  overflow: hidden;
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-  padding: 5px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  body {
+    margin: 0;
+    background: var(--c-bg);
+    color: var(--c-fg);
+    font-family: var(--font-sans);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    user-select: none;
+  }
+
+  /* Tokens and hashes stay selectable so they can be copied manually. */
+  .selectable,
+  textarea,
+  input {
+    user-select: text;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 2px;
+  }
 }
 
-/* Wails Desktop Window Drag Regions */
-.window-drag-region {
-  --wails-draggable: drag;
-  -webkit-app-region: drag;
-}
-
-.window-no-drag {
-  --wails-draggable: no-drag;
-  -webkit-app-region: no-drag;
-}
-
-/* Monospace text */
-.font-mono {
-  font-family: var(--font-mono);
-}
-
-/* Desktop Scrollbar */
+/* Thin desktop scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  background: var(--bg-inset);
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--border-app);
-  border-radius: 2px;
+  background: var(--c-border);
+  border-radius: 8px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border-highlight);
+  background: var(--c-border-strong);
 }
 
-/* 360-degree rotation animation with exact 2s duration (Pairing Screen) */
-@keyframes spin-clockwise-2s {
-  from {
-    transform: rotate(0deg);
+/* ── Motion language ──────────────────────────────────────────────
+ * Every looping animation is tied to a real waiting state and is removed
+ * entirely when the user prefers reduced motion. */
+@keyframes ftu-hover {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes ftu-pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes ftu-dash {
+  to { stroke-dashoffset: -24; }
+}
+@keyframes ftu-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ftu-view-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes ftu-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes ftu-ripple {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes ftu-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.anim-hover { animation: ftu-hover 2.4s ease-in-out infinite; }
+.anim-pulse-ring { animation: ftu-pulse-ring 1.8s ease-out infinite; }
+.anim-dash { animation: ftu-dash 1.2s linear infinite; }
+.anim-fade-up { animation: ftu-fade-up 0.28s ease-out both; }
+.anim-view-in { animation: ftu-view-in 0.22s ease-out both; }
+.anim-pop { animation: ftu-pop 0.4s cubic-bezier(.3,.7,.4,1) both; }
+.anim-ripple { animation: ftu-ripple 0.9s ease-out 1 both; }
+.anim-shake { animation: ftu-shake 0.45s ease-in-out 1; }
+
+/* Pairing magpie: wings and tail are sprite sheets of `--frames` poses (frame 0 = rest); the body is still. */
+.bird { position: relative; aspect-ratio: 280 / 281; --sway-duration: 1.3s; }
+.bird-layer { position: absolute; inset: 0; overflow: hidden; }
+.bird-sheet { display: block; height: 100%; width: calc(var(--frames) * 100%); max-width: none; }
+.bird-animated .bird-sheet { animation: ftu-sheet var(--sway-duration) steps(var(--frames)) infinite; }
+
+@keyframes ftu-sheet {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes ftu-bit {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate(var(--bit-dx, -10px), var(--bit-dy, 0px)); }
+}
+/* Each digit shows "0" and "1" alternately at its own fast rate; with motion off it rests on a still "0". */
+@keyframes ftu-bit-a { 0%, 49.99% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes ftu-bit-b { 0%, 49.99% { opacity: 0; } 50%, 100% { opacity: 1; } }
+.anim-bit { animation: ftu-bit var(--bit-dur, 0.8s) linear infinite; }
+.anim-bit i { font-style: normal; }
+.anim-bit .bit-a { display: inline-block; animation: ftu-bit-a var(--bit-flip, 0.16s) steps(1) infinite; }
+.anim-bit .bit-b { position: absolute; inset: 0; opacity: 0; animation: ftu-bit-b var(--bit-flip, 0.16s) steps(1) infinite; }
+
+/* Motion preference (WCAG 2.2.2 / EN 301 549 11.7): follow the OS "reduce motion" setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
-.animate-rotate-2s {
-  animation: spin-clockwise-2s 2s linear infinite;
+/* Windows High Contrast / forced colours: keep the progress fill visible. */
+.forced-fill { forced-color-adjust: none; }
+@media (forced-colors: active) {
+  .forced-fill { background-color: Highlight !important; }
 }
 
+/* Wails drag regions */
+.window-drag-region {
+  --wails-draggable: drag;
+}
+.window-no-drag {
+  --wails-draggable: no-drag;
+}

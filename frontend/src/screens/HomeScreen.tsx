@@ -1,76 +1,84 @@
-import React, { useState } from 'react';
-import { LogoPlaceholder } from '../components/common/LogoPlaceholder';
+import { useState } from 'react';
+import { ArrowRight, Download, LogOut, Send, ShieldCheck } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { QuitApplication } from '../wailsjs/go/ui/App';
-import type { ViewMode, PairingMode } from '../types/navigation';
-import { Send, Download, LogOut } from 'lucide-react';
+import { hasBackendMethod } from '../lib/wails';
+import { BrandMark } from '../components/common/BrandMark';
+import { Button } from '../components/ui/Button';
+import type { PeerRole } from '../types/navigation';
 
 interface HomeScreenProps {
-  onNavigate: (view: ViewMode, mode?: PairingMode) => void;
+  onStart: (role: PeerRole) => void;
 }
 
+interface ActionCardProps {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  primary?: boolean;
+  onClick: () => void;
+}
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
-  const [isExiting, setIsExiting] = useState<boolean>(false);
+function ActionCard({ icon: Icon, title, description, primary, onClick }: ActionCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group flex flex-1 items-center gap-3 rounded-md border px-4 py-3.5 text-left transition-colors cursor-pointer ${
+        primary
+          ? 'border-primary-hover bg-primary text-on-primary hover:bg-primary-hover'
+          : 'border-line-strong bg-surface text-fg hover:border-accent hover:bg-surface-2'
+      }`}
+    >
+      <Icon className={`size-5 shrink-0 ${primary ? '' : 'text-accent'}`} aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold uppercase tracking-wider">{title}</span>
+        <span className={`block text-xs ${primary ? 'text-on-primary' : 'text-muted'}`}>{description}</span>
+      </span>
+      <ArrowRight className="size-4 shrink-0 opacity-60 transition-transform duration-200 group-hover:translate-x-1 group-focus-visible:translate-x-1" aria-hidden />
+    </button>
+  );
+}
+
+export function HomeScreen({ onStart }: HomeScreenProps) {
+  const [isExiting, setIsExiting] = useState(false);
 
   const handleExit = async () => {
-    if (isExiting) return;
+    if (!hasBackendMethod('QuitApplication')) {
+      console.warn('Wails backend not connected (browser mode).');
+      return;
+    }
     setIsExiting(true);
     try {
-      const hasWailsQuit =
-        typeof window !== 'undefined' &&
-        typeof (window as unknown as { go?: { ui?: { App?: { QuitApplication?: unknown } } } }).go?.ui?.App?.QuitApplication === 'function';
-
-      if (hasWailsQuit) {
-        await QuitApplication();
-      } else {
-        console.warn('Wails backend not connected (running in browser mode).');
-        setTimeout(() => setIsExiting(false), 1500);
-      }
-    } catch (err: unknown) {
+      await QuitApplication();
+    } catch (err) {
       console.error('Failed to quit application:', err);
       setIsExiting(false);
     }
   };
 
-
   return (
-    <div className="flex-1 flex items-center justify-center p-6">
-      <div className="flex flex-col items-center gap-7 max-w-md w-full -mt-6">
-        <LogoPlaceholder />
-        <div className="flex items-center gap-2.5 w-full">
-          <button
-            type="button"
-            disabled={isExiting}
-            onClick={() => onNavigate('pairing', 'send')}
-            className="flex-1 min-w-[120px] h-10 px-5 rounded-[3px] bg-[#2fa340] hover:bg-[#288d37] active:bg-[#1f752c] disabled:opacity-50 text-white font-semibold text-xs tracking-wider uppercase border border-[#278535] shadow-xs flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400"
-          >
-            <Send className="w-3.5 h-3.5 stroke-[2.2]" />
-            <span>Send</span>
-          </button>
+    <>
+      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-16 pt-8">
+        <div className="flex w-full max-w-xl flex-col items-center gap-7">
+          <BrandMark />
 
-          {/* Receive Button: Desktop Utility Panel Button */}
-          <button
-            type="button"
-            disabled={isExiting}
-            onClick={() => onNavigate('pairing', 'receive')}
-            className="flex-1 min-w-[120px] h-10 px-5 rounded-[3px] bg-[var(--bg-panel)] hover:bg-[var(--bg-panel-hover)] active:bg-[var(--bg-inset)] disabled:opacity-50 hover:border-[#2fa340] border border-[var(--border-app)] font-semibold text-xs tracking-wider uppercase shadow-xs flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400"
-          >
-            <Download className="w-3.5 h-3.5 text-[#2fa340] stroke-[2.2]" />
-            <span>Receive</span>
-          </button>
+          <div className="flex w-full flex-col gap-3 sm:flex-row">
+            <ActionCard primary icon={Send} title="Send" description="Throw a file to a peer" onClick={() => onStart('send')} />
+            <ActionCard icon={Download} title="Receive" description="Catch a file from a peer" onClick={() => onStart('receive')} />
+          </div>
 
-          {/* Exit Button: Neutral / Subtle Desktop Button */}
-          <button
-            type="button"
-            disabled={isExiting}
-            onClick={handleExit}
-            className="min-w-[95px] h-10 px-4 rounded-[3px] bg-[var(--bg-panel)] hover:bg-rose-950/20 active:bg-[var(--bg-inset)] hover:text-rose-400 hover:border-rose-800/60 disabled:opacity-50 text-[var(--text-muted)] border border-[var(--border-app)] font-semibold text-xs tracking-wider uppercase shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-500/50"
-          >
-            <LogOut className="w-3.5 h-3.5 stroke-[2.2]" />
-            <span>{isExiting ? '...' : 'Exit'}</span>
-          </button>
+          <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-line pt-3 text-[0.6875rem] text-dim">
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="size-3.5 text-accent" aria-hidden />
+              Encrypted QUIC (TLS 1.3) · Ed25519 peer identity · SHA-256 verified
+            </span>
+            <Button variant="ghost" size="sm" icon={LogOut} loading={isExiting} onClick={handleExit}>
+              Exit
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
+      </main>
+    </>
   );
-};
+}

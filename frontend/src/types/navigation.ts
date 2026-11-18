@@ -1,3 +1,4 @@
-export type ViewMode = 'home' | 'pairing' | 'send' | 'receive';
+export type ViewMode = 'home' | 'pairing' | 'transfer';
 
-export type PairingMode = 'send' | 'receive';
+/** Which side of the transfer this peer plays. */
+export type PeerRole = 'send' | 'receive';

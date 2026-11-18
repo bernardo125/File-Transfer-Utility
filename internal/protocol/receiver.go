@@ -81,7 +81,7 @@ func HandleIncomingTransfer(controlStream *quic.Stream, conn *quic.Conn, reader 
 	}
 
 	// receive file body via transfer module and verify checksum on the fly
-	_, err = transfer.ReceiveFile(destFileName, conn, req.FileSize, req.FileHash)
+	_, err = transfer.ReceiveFile(destFileName, conn, req.FileSize, req.FileHash, nil)
 	if err != nil {
 		log.Printf("[Receiver] Erro na recepção ou verificação de integridade: %v", err)
 		SendCodeResponse(StatusConflict, controlStream)

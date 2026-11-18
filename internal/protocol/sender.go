@@ -82,7 +82,7 @@ func SendFileToPeer(conn *quic.Conn, filePath string) error {
 	log.Println("[Sender] Destinatário aceitou a transferência! A iniciar envio do ficheiro...")
 
 	// transfer file payload via transfer module
-	err = transfer.SendFile(file, conn)
+	err = transfer.SendFile(file, conn, nil)
 	if err != nil {
 		return fmt.Errorf("falha durante o envio do ficheiro: %w", err)
 	}
