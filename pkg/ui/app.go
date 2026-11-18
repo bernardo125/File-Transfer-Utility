@@ -34,6 +34,7 @@ type App struct {
 	quicConn           *quic.Conn
 	downloadDir        string
 	incomingDecisionCh chan bool
+	offerPending       bool // true only while an offer waits for the user's decision (guarded by mu)
 	cancelConnect      context.CancelFunc
 	connectMu          sync.Mutex
 	emitter            func(event string, data ...any) // nil in production: events go through the Wails runtime
@@ -427,8 +428,16 @@ func (a *App) SendSelectedFile(filePath string) error {
 
 // RespondIncomingTransfer signals the receiver loop whether to accept or reject an incoming file.
 func (a *App) RespondIncomingTransfer(accept bool) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// A decision is only valid for an offer the user has actually been shown. Without this check an
+	// early "accept" would stay in the channel and silently approve the next file that arrives.
+	if !a.offerPending {
+		return fmt.Errorf("no pending incoming transfer to respond to")
+	}
 	select {
 	case a.incomingDecisionCh <- accept:
+		a.offerPending = false
 		return nil
 	default:
 		return fmt.Errorf("no pending incoming transfer to respond to")

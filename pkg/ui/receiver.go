@@ -40,6 +40,16 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 		return
 	}
 
+	// Open the decision window before the UI is told, so a fast answer cannot arrive too early,
+	// and drop any decision left over from an earlier offer.
+	a.mu.Lock()
+	select {
+	case <-a.incomingDecisionCh:
+	default:
+	}
+	a.offerPending = true
+	a.mu.Unlock()
+
 	a.emit(EventTransferIncoming, IncomingTransferDTO{
 		FileName: req.FileName,
 		FileSize: req.FileSize,
@@ -52,6 +62,9 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 	case <-time.After(120 * time.Second):
 		accepted = false
 	}
+	a.mu.Lock()
+	a.offerPending = false
+	a.mu.Unlock()
 
 	if !accepted {
 		_ = protocol.SendCodeResponse(protocol.StatusForbidden, controlStream)
