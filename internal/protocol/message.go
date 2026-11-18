@@ -3,10 +3,25 @@ package protocol
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/quic-go/quic-go"
+)
+
+// MaxControlMessageSize bounds a single control frame. Control frames carry tiny JSON
+// documents (file name, size, hash, status); without a bound a peer could announce a
+// 4 GiB length prefix and force the receiver to allocate it.
+const MaxControlMessageSize = 64 * 1024
+
+var (
+	// ErrFrameTooLarge is returned when a control frame announces more than MaxControlMessageSize bytes.
+	ErrFrameTooLarge = errors.New("control frame exceeds maximum size")
+	// ErrInvalidRequest is returned when a metadata request fails validation.
+	ErrInvalidRequest = errors.New("invalid metadata request")
 )
 
 // HTTP-like protocol with JSON serialization in the QUIC control stream
@@ -46,13 +61,27 @@ func ReceiveMetadataResponse(controlStream *quic.Stream) (*Response, error) {
 // RECEIVER
 // ReceiveMetaDataRequest parses a Request from payload bytes
 func ReceiveMetaDataRequest(controlStream *quic.Stream) (*Request, error) {
-	var request Request
 	resqPayload, err := receiveControlMessage(controlStream)
-	err = json.Unmarshal(resqPayload, &request)
 	if err != nil {
 		return nil, err
 	}
+	return DecodeRequest(resqPayload)
+}
 
+// DecodeRequest parses and validates a metadata request payload. A request that decodes
+// but carries a negative size or a malformed hash is rejected, because the receiver uses
+// those fields to decide whether size and integrity checks are enforced.
+func DecodeRequest(payload []byte) (*Request, error) {
+	var request Request
+	if err := json.Unmarshal(payload, &request); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+	}
+	if request.FileSize < 0 {
+		return nil, fmt.Errorf("%w: negative file size %d", ErrInvalidRequest, request.FileSize)
+	}
+	if len(request.FileHash) != 64 || strings.Trim(request.FileHash, "0123456789abcdef") != "" {
+		return nil, fmt.Errorf("%w: file hash must be 64 lowercase hex characters", ErrInvalidRequest)
+	}
 	return &request, nil
 }
 
@@ -71,7 +100,10 @@ func BuildCodeResponse(code StatusCode) ([]byte, error) {
 }
 
 // SHARED - SENDER AND RECEIVER
-func sendControlMessage(metaPayload []byte, controlStream *quic.Stream) error {
+func sendControlMessage(metaPayload []byte, controlStream io.Writer) error {
+	if len(metaPayload) > MaxControlMessageSize {
+		return ErrFrameTooLarge
+	}
 	// send payload length
 	length := uint32(len(metaPayload))
 	err := binary.Write(controlStream, binary.BigEndian, length)
@@ -82,12 +114,15 @@ func sendControlMessage(metaPayload []byte, controlStream *quic.Stream) error {
 	return err
 }
 
-func receiveControlMessage(controlStream *quic.Stream) (response []byte, err error) {
+func receiveControlMessage(controlStream io.Reader) (response []byte, err error) {
 	// read payload length
 	var length uint32
 	err = binary.Read(controlStream, binary.BigEndian, &length)
 	if err != nil {
 		return nil, err
+	}
+	if length > MaxControlMessageSize {
+		return nil, fmt.Errorf("%w: announced %d bytes", ErrFrameTooLarge, length)
 	}
 	recvBuff := make([]byte, length)
 	_, err = io.ReadFull(controlStream, recvBuff) // ReadFull garantees full read of length bytes (parcial reading problem)

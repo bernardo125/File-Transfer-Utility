@@ -31,13 +31,24 @@ type connectionCandidates struct {
 func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
 	stunClient := Client{}
 	local_ipv4, public_ipv6 := GetMachineAddrs(conn)
-	stun_response, _ := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
+	stun_response, err := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
+	if err != nil {
+		// No public mapping available (offline / STUN blocked): advertise an unspecified
+		// address so the token is still valid; LAN and IPv6 candidates keep working.
+		log.Printf("[Discovery] STUN failed, continuing without public IPv4: %v", err)
+		stun_response = &net.UDPAddr{IP: net.IPv4zero, Port: local_ipv4.Port}
+	}
 	public, priv := ed55519TokenGen()
-	connCandidates := connectionCandidates{LocalAddressIPV4: local_ipv4, PublicAddressIPV6: public_ipv6, StunPublicAddressIPV4: stun_response, Ed25519PublicToken: &public}
-	nonce, ciphertext := chacha20Encryct(secret, &connCandidates)
-	finalPacket := append(nonce, ciphertext...)
-	key = base64Enconding(finalPacket)
-	return key, priv
+	return BuildToken(local_ipv4, public_ipv6, stun_response, public), priv
+}
+
+// BuildToken serializes the connection candidates into the shareable (obfuscated) token.
+// It performs no network I/O, which makes the token format testable without STUN.
+// ipv6 may be nil; local and stun must be IPv4 addresses.
+func BuildToken(local, ipv6, stun *net.UDPAddr, public ed25519.PublicKey) string {
+	candidates := connectionCandidates{LocalAddressIPV4: local, PublicAddressIPV6: ipv6, StunPublicAddressIPV4: stun, Ed25519PublicToken: &public}
+	nonce, ciphertext := chacha20Encryct(secret, &candidates)
+	return base64Enconding(append(nonce, ciphertext...))
 }
 
 // generate ed55519 key to avoid spoofing and mitm attacks
@@ -53,9 +64,17 @@ func GetPeer(key string) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAdd
 	if len(key) < 50 {
 		return nil, nil, nil, nil, fmt.Errorf("That's not a token")
 	}
-	decodedBytes := base64Decoding(key)
-	nonce := decodedBytes[:12] // nonce is 12 bytes
-	cipherText := decodedBytes[12:]
+	decodedBytes, err := base64Decoding(key)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("That's not a token: %w", err)
+	}
+	// nonce (12) + minimal plaintext (44: key + local + stun); IPv6 form is 62
+	plainLen := len(decodedBytes) - chacha20.NonceSize
+	if plainLen != 44 && plainLen != 62 {
+		return nil, nil, nil, nil, fmt.Errorf("That's not a token: unexpected length %d", len(decodedBytes))
+	}
+	nonce := decodedBytes[:chacha20.NonceSize]
+	cipherText := decodedBytes[chacha20.NonceSize:]
 	return chacha20Decryct(secret, nonce, cipherText)
 }
 
@@ -171,10 +190,6 @@ func decodeIPV6IfExists(encodedText []byte) *net.UDPAddr {
 	return nil
 }
 
-func base64Decoding(b64token string) (decoded []byte) {
-	decode, err := base64.RawURLEncoding.DecodeString(b64token)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	return decode
+func base64Decoding(b64token string) ([]byte, error) {
+	return base64.RawURLEncoding.DecodeString(b64token)
 }
