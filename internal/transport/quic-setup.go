@@ -32,6 +32,10 @@ func generateTLSConfig(priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.Pub
 		}},
 		NextProtos:         []string{"quic-echo-example"},
 		InsecureSkipVerify: true, // hostname check disabled; chain verified below
+		// Without this the listening side never asks the dialer for a certificate, so
+		// VerifyPeerCertificate would only ever run on the dialer and any host able to
+		// reach the UDP port could open a session. Mutual authentication is required.
+		ClientAuth: tls.RequireAnyClientCert,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
 				return errors.New("peer sent no certificate")
