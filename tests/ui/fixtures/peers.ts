@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, readdirSync, createReadStream } from 'node:fs';
 import { once } from 'node:events';
 import path from 'node:path';
-import { SHELLS } from '../../playwright.config';
+import { SHELLS } from '../playwright.config';
 import { HomePage } from '../pages/home.page';
 import { PairingPage } from '../pages/pairing.page';
 import { TransferPage } from '../pages/transfer.page';

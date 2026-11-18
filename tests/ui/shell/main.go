@@ -5,7 +5,7 @@
 // folder dialogs, the clipboard and "open folder". Everything else (token creation, hole punching,
 // QUIC, transfer, hashing, receiver loop) is the production code path.
 //
-//	go run ./internal/e2e/uishell -addr 127.0.0.1:4301 -dist frontend/dist
+//	go run ./tests/ui/shell -addr 127.0.0.1:4301 -dist frontend/dist
 package main
 
 import (

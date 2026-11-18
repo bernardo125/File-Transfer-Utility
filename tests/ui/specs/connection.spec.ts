@@ -1,4 +1,4 @@
-import { test, expect, pair } from './fixtures/peers';
+import { test, expect, pair } from '../fixtures/peers';
 
 test('pasting garbage as the peer token is rejected by the real backend and nothing hangs', async ({ alice }) => {
   await alice.startAs('send');

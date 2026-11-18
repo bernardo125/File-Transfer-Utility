@@ -6,10 +6,10 @@ export const SHELLS = { alice: 4301, bob: 4302 } as const;
 /**
  * Real end-to-end tests: two instances of the real Go backend (ui.App), each driven through the
  * real production frontend in its own browser, talking to each other over real UDP/QUIC on
- * loopback. Only the native window is replaced (see internal/e2e/uishell). See e2e/README.md.
+ * loopback. Only the native window is replaced (see ./shell). See README.md.
  */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './specs',
   // Both peers keep OS sockets and share two long-lived backends, so tests run one at a time.
   fullyParallel: false,
   workers: 1,
@@ -28,9 +28,9 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } }, // WebView2 engine
     ...(CI || process.env.PW_WEBKIT ? [{ name: 'webkit', use: { ...devices['Desktop Safari'] } }] : []), // WebKitGTK/WKWebView engine
   ],
-  // One backend per peer, serving the production build (`npm run build` runs first, see test:e2e).
+  // One backend per peer, serving the production build (built by `npm test`, see package.json).
   webServer: Object.values(SHELLS).map((port) => ({
-    command: `go run ../internal/e2e/uishell -addr 127.0.0.1:${port} -dist dist`,
+    command: `go run ./shell -addr 127.0.0.1:${port} -dist ../../frontend/dist`,
     url: `http://127.0.0.1:${port}/`,
     reuseExistingServer: !CI,
     timeout: 180_000,

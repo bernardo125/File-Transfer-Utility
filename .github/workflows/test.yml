@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  PKGS: ./internal/... ./pkg/cli/...
+  PKGS: ./internal/... ./pkg/cli/... ./tests/...
 
 jobs:
   fast:
@@ -65,20 +65,24 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+        with: { node-version: 22, cache: npm, cache-dependency-path: |
+            frontend/package-lock.json
+            tests/ui/package-lock.json }
       - run: npm ci
         working-directory: frontend
+      - run: npm ci
+        working-directory: tests/ui
       - run: npx playwright install --with-deps ${{ matrix.browser }}
-        working-directory: frontend
-      - run: npm run build && npx playwright test --project=${{ matrix.browser }}
-        working-directory: frontend
+        working-directory: tests/ui
+      - run: npm run build:frontend && npx playwright test --project=${{ matrix.browser }}
+        working-directory: tests/ui
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-${{ matrix.browser }}
           path: |
-            frontend/playwright-report
-            frontend/test-results
+            tests/ui/playwright-report
+            tests/ui/test-results
 
   bench:
     name: benchmarks (informational, manual)

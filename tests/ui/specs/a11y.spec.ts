@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { test, expect, pair, makeFile } from './fixtures/peers';
+import { test, expect, pair, makeFile } from '../fixtures/peers';
 
 // WCAG 2.x A/AA on the screens a real session reaches (real token, real connection, real offer).
 const violations = async (page: Page) =>

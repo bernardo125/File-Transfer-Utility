@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { test, expect, pair, makeFile, sha256Of } from './fixtures/peers';
+import { test, expect, pair, makeFile, sha256Of } from '../fixtures/peers';
 
 // Real UI <-> real Go backend <-> real UDP hole punch + QUIC <-> real Go backend <-> real UI.
 // Each assertion about a transfer ends on the receiver's disk: bytes and SHA-256, not just a green banner.

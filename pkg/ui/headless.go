@@ -3,7 +3,7 @@ package ui
 import wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 // emit delivers a backend event to the frontend. In the desktop app that is the Wails runtime;
-// a headless host (the E2E shell in internal/e2e/uishell) installs its own emitter instead.
+// a headless host (the E2E shell in tests/ui/shell) installs its own emitter instead.
 func (a *App) emit(event string, data ...any) {
 	if a.emitter != nil {
 		a.emitter(event, data...)
