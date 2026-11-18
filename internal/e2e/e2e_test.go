@@ -255,3 +255,34 @@ func TestRepeatedConnectDisconnectCyclesDoNotLeakGoroutines(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// Detects: an abrupt drop going unnoticed by the other side (it would wait for the idle timeout
+// or forever), and a fresh session failing after a previous one died. Recovery in this product
+// is a new session (new socket + new token); reusing the same UDP socket for a second hole
+// punch after QUIC ran on it is not supported (see docs/TESTING.md).
+func TestNewSessionWorksAfterAbruptDrop(t *testing.T) {
+	src, dst := t.TempDir(), t.TempDir()
+	t.Chdir(dst)
+	p1, s1 := testutil.WriteFile(t, src, "first.bin", 200_000, 61)
+	p2, s2 := testutil.WriteFile(t, src, "second.bin", 300_000, 62)
+
+	a, b := testutil.NewPeer(t), testutil.NewPeer(t)
+	ca, cb := establish(t, a, b, b.Addr(), a.Addr())
+	transfer(t, ca, cb, p1)
+	assertReceived(t, dst, "first.bin", s1)
+
+	ca.CloseWithError(99, "link lost") // sender vanishes without any goodbye on the data path
+	select {
+	case <-cb.Context().Done():
+	case <-time.After(guard):
+		t.Fatal("peer never noticed the dropped connection")
+	}
+	if _, err := cb.OpenStreamSync(context.Background()); err == nil {
+		t.Fatal("stream opened on a dead connection")
+	}
+
+	a2, b2 := testutil.NewPeer(t), testutil.NewPeer(t)
+	ca2, cb2 := establish(t, a2, b2, b2.Addr(), a2.Addr())
+	transfer(t, ca2, cb2, p2)
+	assertReceived(t, dst, "second.bin", s2)
+}
