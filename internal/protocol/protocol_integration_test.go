@@ -210,22 +210,6 @@ func TestReceiverAnswersBadRequestToInvalidMetadata(t *testing.T) {
 	}
 }
 
-// Detects: peer-announced 4 GiB frame length reaching make([]byte, n) on a live connection.
-func TestReceiverSurvivesOversizedFrameAnnouncement(t *testing.T) {
-	ca, cb, _, _ := session(t)
-	rc := receiveOnce(t, cb, "Y\n")
-	st, err := ca.OpenStreamSync(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, '{'}); err != nil {
-		t.Fatal(err)
-	}
-	if err := await(t, rc, "receiver"); err == nil {
-		t.Fatal("receiver accepted an oversized frame")
-	}
-}
-
 // Detects: the sender panicking (nil response) or hanging when the receiver disappears
 // instead of answering.
 func TestSenderFailsCleanlyWhenReceiverConnectionDies(t *testing.T) {
@@ -247,25 +231,6 @@ func TestSenderFailsCleanlyWhenReceiverConnectionDies(t *testing.T) {
 		}
 	case <-time.After(guard):
 		t.Fatal("sender hung after the receiver connection died")
-	}
-}
-
-// Detects: the receiver blocking forever in the data phase when the sender drops after
-// the accept (the process would need to be killed).
-func TestReceiverFailsWhenSenderDisappearsAfterAccept(t *testing.T) {
-	ca, cb, _, dst := session(t)
-	rc := receiveOnce(t, cb, "Y\n")
-	req, _ := json.Marshal(Request{FileName: "a.bin", FileSize: 10, FileHash: validHash})
-	st := rawRequest(t, ca, req)
-	if r, err := ReceiveMetadataResponse(st); err != nil || r.Status != StatusContinue {
-		t.Fatalf("response=%v err=%v", r, err)
-	}
-	ca.CloseWithError(1, "gone")
-	if err := await(t, rc, "receiver"); err == nil {
-		t.Fatal("receiver reported success without payload")
-	}
-	if entries, _ := os.ReadDir(dst); len(entries) != 0 {
-		t.Fatalf("files left behind: %v", entries)
 	}
 }
 
@@ -367,3 +332,38 @@ func TestSenderReportsFailureWhenReceiverRejectsFinalIntegrityCheck(t *testing.T
 }
 
 func statusName(c StatusCode) string { return fmt.Sprintf("status_%d", int(c)) }
+
+// Detects: peer-announced 4 GiB frame length reaching make([]byte, n) on a live connection.
+func TestReceiverSurvivesOversizedFrameAnnouncement(t *testing.T) {
+	ca, cb, _, _ := session(t)
+	rc := receiveOnce(t, cb, "Y\n")
+	st, err := ca.OpenStreamSync(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, '{'}); err != nil {
+		t.Fatal(err)
+	}
+	if err := await(t, rc, "receiver"); err == nil {
+		t.Fatal("receiver accepted an oversized frame")
+	}
+}
+
+// Detects: the receiver blocking forever in the data phase when the sender drops after
+// the accept (the process would need to be killed).
+func TestReceiverFailsWhenSenderDisappearsAfterAccept(t *testing.T) {
+	ca, cb, _, dst := session(t)
+	rc := receiveOnce(t, cb, "Y\n")
+	req, _ := json.Marshal(Request{FileName: "a.bin", FileSize: 10, FileHash: validHash})
+	st := rawRequest(t, ca, req)
+	if r, err := ReceiveMetadataResponse(st); err != nil || r.Status != StatusContinue {
+		t.Fatalf("response=%v err=%v", r, err)
+	}
+	ca.CloseWithError(1, "gone")
+	if err := await(t, rc, "receiver"); err == nil {
+		t.Fatal("receiver reported success without payload")
+	}
+	if entries, _ := os.ReadDir(dst); len(entries) != 0 {
+		t.Fatalf("files left behind: %v", entries)
+	}
+}

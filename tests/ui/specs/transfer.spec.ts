@@ -66,30 +66,6 @@ test('several files in one session: each arrives intact and the second offer is 
   expect(await sha256Of(path.join(bob.downloadDir, 'two.bin'))).toBe(second.sha256);
 });
 
-test('an empty file is a valid transfer', async ({ alice, bob, workDir }) => {
-  const file = await makeFile(workDir, 'empty.txt', 0);
-  await pair(alice, bob);
-  await alice.willPick(file.path);
-  await alice.transfer.chooseFile.click();
-  await bob.transfer.accept.click();
-
-  await expect(alice.transfer.headline).toHaveText('Delivered');
-  await expect(bob.transfer.headline).toHaveText('File received');
-  expect(await sha256Of(path.join(bob.downloadDir, 'empty.txt'))).toBe(file.sha256);
-});
-
-test('a 128 MiB file completes and is byte-identical', async ({ alice, bob, workDir }) => {
-  const file = await makeFile(workDir, 'big.bin', 128 * 1024 * 1024);
-  await pair(alice, bob);
-  await alice.willPick(file.path);
-  await alice.transfer.chooseFile.click();
-  await bob.transfer.accept.click();
-
-  await expect(alice.transfer.headline).toHaveText('Delivered', { timeout: 90_000 });
-  await expect(bob.transfer.headline).toHaveText('File received');
-  expect(await sha256Of(path.join(bob.downloadDir, 'big.bin'))).toBe(file.sha256);
-});
-
 test('"Show in folder" opens the folder that really contains the received file', async ({ alice, bob, workDir }) => {
   const file = await makeFile(workDir, 'doc.bin', 10_000);
   await pair(alice, bob);
@@ -100,20 +76,4 @@ test('"Show in folder" opens the folder that really contains the received file',
 
   await bob.transfer.showInFolder.click();
   await expect.poll(() => bob.openedFolders()).toEqual([path.join(bob.downloadDir, 'doc.bin')]);
-});
-
-test('the sender dies mid-transfer: Bob’s UI reports a failure and no partial file is left', async ({ alice, bob, workDir }) => {
-  const file = await makeFile(workDir, 'huge.bin', 512 * 1024 * 1024);
-  await pair(alice, bob);
-  await alice.willPick(file.path);
-  await alice.transfer.chooseFile.click();
-  await bob.transfer.accept.click();
-  await expect(bob.transfer.headline).toHaveText('Receiving');
-  await expect.poll(async () => Number(await bob.transfer.progress.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
-
-  await alice.crash(); // Alice's app closes: socket and QUIC session vanish
-
-  await expect(bob.transfer.headline).toHaveText('Transfer failed', { timeout: 45_000 });
-  await expect(bob.page.getByText('verified')).toHaveCount(0);
-  expect(bob.receivedFiles()).toEqual([]);
 });

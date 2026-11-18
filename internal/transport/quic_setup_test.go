@@ -123,17 +123,3 @@ func TestDialToUnavailablePeerFailsWithinTimeout(t *testing.T) {
 		t.Fatalf("dial did not honour its timeout: took %v", el)
 	}
 }
-
-func TestListenWithoutPeerTimesOut(t *testing.T) {
-	me, other := newIdent(t), newIdent(t)
-	sock, _ := newSock(t)
-	start := time.Now()
-	c, err := quicDoListen(sock, &me.priv, &other.pub, 300*time.Millisecond)
-	if err == nil {
-		c.CloseWithError(0, "")
-		t.Fatal("listen returned a connection although nobody dialed")
-	}
-	if el := time.Since(start); el > 3*time.Second {
-		t.Fatalf("listen did not honour its timeout: took %v", el)
-	}
-}

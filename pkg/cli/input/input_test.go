@@ -29,34 +29,6 @@ func within[T any](t *testing.T, f func() (T, error)) (T, error) {
 	}
 }
 
-// Detects: menu accepting garbage, or not tolerating surrounding whitespace / CRLF terminals.
-func TestAskMenuOption(t *testing.T) {
-	tests := []struct {
-		name, in, want string
-	}{
-		{"valid", "1\n", "1"},
-		{"each valid option", "3\n", "3"},
-		{"skips invalid until valid", "9\nabc\n\n0\n2\n", "2"},
-		{"trims spaces and CRLF", "  2 \r\n", "2"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := within(t, func() (string, error) { return AskMenuOption(rd(tc.in)) })
-			if err != nil || got != tc.want {
-				t.Fatalf("got %q err=%v, want %q", got, err, tc.want)
-			}
-		})
-	}
-}
-
-func TestAskMenuOptionReturnsErrorWhenInputEnds(t *testing.T) {
-	for _, in := range []string{"", "9\n", "1"} { // "1" has no newline: incomplete line
-		if got, err := within(t, func() (string, error) { return AskMenuOption(rd(in)) }); err == nil {
-			t.Errorf("input %q: returned %q without error", in, got)
-		}
-	}
-}
-
 // Detects: short/garbage tokens passing as peer tokens and whitespace breaking a pasted token.
 func TestAskPeerToken(t *testing.T) {
 	long := "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -139,5 +111,33 @@ func TestYesNoPrompts(t *testing.T) {
 				t.Fatalf("closed input must be an error and never consent: got %v err=%v", got, err)
 			}
 		})
+	}
+}
+
+// Detects: menu accepting garbage, or not tolerating surrounding whitespace / CRLF terminals.
+func TestAskMenuOption(t *testing.T) {
+	tests := []struct {
+		name, in, want string
+	}{
+		{"valid", "1\n", "1"},
+		{"each valid option", "3\n", "3"},
+		{"skips invalid until valid", "9\nabc\n\n0\n2\n", "2"},
+		{"trims spaces and CRLF", "  2 \r\n", "2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := within(t, func() (string, error) { return AskMenuOption(rd(tc.in)) })
+			if err != nil || got != tc.want {
+				t.Fatalf("got %q err=%v, want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestAskMenuOptionReturnsErrorWhenInputEnds(t *testing.T) {
+	for _, in := range []string{"", "9\n", "1"} { // "1" has no newline: incomplete line
+		if got, err := within(t, func() (string, error) { return AskMenuOption(rd(in)) }); err == nil {
+			t.Errorf("input %q: returned %q without error", in, got)
+		}
 	}
 }

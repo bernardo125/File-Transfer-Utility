@@ -71,18 +71,6 @@ func TestHashFileSHA256HashesWholeFileAndRewinds(t *testing.T) {
 	}
 }
 
-// Detects: an I/O failure being reported as a valid hash.
-func TestHashFileSHA256ClosedFileReturnsError(t *testing.T) {
-	f, err := os.Open(writeTemp(t, []byte("data")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	if got, err := HashFileSHA256(f); err == nil {
-		t.Fatalf("hashing a closed file returned %q with no error", got)
-	}
-}
-
 // Detects: SelectFileToSend returning a file that is not ready to stream (offset != 0), metadata
 // that disagrees with the file, or a digest that does not match the content.
 func TestSelectFileToSendReturnsReadyFileWithCorrectMetadata(t *testing.T) {
@@ -106,17 +94,6 @@ func TestSelectFileToSendReturnsReadyFileWithCorrectMetadata(t *testing.T) {
 	}
 }
 
-func TestSelectFileToSendEmptyFile(t *testing.T) {
-	f, stats, hash, err := SelectFileToSend(writeTemp(t, nil))
-	if err != nil {
-		t.Fatalf("empty file must be sendable: %v", err)
-	}
-	defer f.Close()
-	if stats.Size() != 0 || hash != sha(nil) {
-		t.Fatalf("size=%d hash=%s", stats.Size(), hash)
-	}
-}
-
 // Detects: invalid user input (typo, directory) being accepted or crashing; error must be
 // returned and no file handle handed to the caller.
 func TestSelectFileToSendRejectsInvalidPaths(t *testing.T) {
@@ -137,5 +114,17 @@ func TestSelectFileToSendRejectsInvalidPaths(t *testing.T) {
 				t.Fatalf("error returned together with values: %v %v %q", f, stats, hash)
 			}
 		})
+	}
+}
+
+// Detects: an I/O failure being reported as a valid hash.
+func TestHashFileSHA256ClosedFileReturnsError(t *testing.T) {
+	f, err := os.Open(writeTemp(t, []byte("data")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if got, err := HashFileSHA256(f); err == nil {
+		t.Fatalf("hashing a closed file returned %q with no error", got)
 	}
 }

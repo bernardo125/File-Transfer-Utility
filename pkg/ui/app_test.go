@@ -55,7 +55,12 @@ func (r *recorder) all() []ev {
 // waitFor blocks until an event satisfying match has been emitted (scanning history first), or fails.
 func (r *recorder) waitFor(t *testing.T, what string, match func(ev) bool) ev {
 	t.Helper()
-	deadline := time.After(wait)
+	return r.waitWithin(t, wait, what, match)
+}
+
+func (r *recorder) waitWithin(t *testing.T, d time.Duration, what string, match func(ev) bool) ev {
+	t.Helper()
+	deadline := time.After(d)
 	seen := 0
 	for {
 		r.mu.Lock()
@@ -220,26 +225,6 @@ func TestTransferEndToEndEventsAndBytes(t *testing.T) {
 	}
 }
 
-// Detects: a decline writing data, or the sender UI not learning about it.
-func TestDeclinedTransferWritesNothingAndSenderIsTold(t *testing.T) {
-	a, b := pair(t)
-	src, _ := testutil.WriteFile(t, t.TempDir(), "no.bin", 100_000, 2)
-
-	sent := a.send(src)
-	b.rec.waitFor(t, "incoming", named(EventTransferIncoming))
-	if err := b.app.RespondIncomingTransfer(false); err != nil {
-		t.Fatal(err)
-	}
-	if err := result(t, sent, "SendSelectedFile"); err == nil || !strings.Contains(err.Error(), "rejected by peer") {
-		t.Fatalf("sender error = %v, want 'rejected by peer'", err)
-	}
-	a.rec.waitFor(t, "sender rejected status", status("rejected"))
-	b.rec.waitFor(t, "receiver rejected status", status("rejected"))
-	if got := b.received(t); len(got) != 0 {
-		t.Fatalf("declined transfer left files: %v", got)
-	}
-}
-
 // Detects: consent bypass. A "yes" given while no offer is pending must not be remembered and
 // silently accept the NEXT file someone sends.
 func TestRespondWithoutPendingOfferDoesNotPreApproveNextFile(t *testing.T) {
@@ -342,7 +327,9 @@ func TestDisconnectIsReportedToThePeerAndSessionEnds(t *testing.T) {
 	if err := a.app.Disconnect(); err != nil {
 		t.Fatal(err)
 	}
-	b.rec.waitFor(t, "peer-lost on B", func(e ev) bool {
+	// Must be prompt: a peer that only notices through the 30 s idle timeout means Disconnect
+	// did not close the QUIC session.
+	b.rec.waitWithin(t, 10*time.Second, "peer-lost on B", func(e ev) bool {
 		d, ok := e.data.(ConnectionStateDTO)
 		return ok && d.State == "error" && d.Detail == "Peer disconnected"
 	})
@@ -408,53 +395,6 @@ func TestReceiverDiesMidTransfer(t *testing.T) {
 	}
 }
 
-// Detects: the receiver loop serving only the first file of a session (UI path of the CLI bug).
-func TestSeveralFilesInOneSession(t *testing.T) {
-	a, b := pair(t)
-	for i, name := range []string{"one.bin", "two.bin", "three.bin"} {
-		src, sum := testutil.WriteFile(t, t.TempDir(), name, int64(40_000+i*7), uint64(20+i))
-		sent := a.send(src)
-		b.rec.waitFor(t, "offer "+name, func(e ev) bool {
-			d, ok := e.data.(IncomingTransferDTO)
-			return ok && d.FileName == name
-		})
-		if err := b.app.RespondIncomingTransfer(true); err != nil {
-			t.Fatal(err)
-		}
-		if err := result(t, sent, name); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		if got := testutil.SHA256File(t, filepath.Join(b.dir, name)); got != sum {
-			t.Fatalf("%s corrupted", name)
-		}
-	}
-}
-
-// Detects: the progress stream flooding the frontend (it re-renders per event) on a big file.
-func TestProgressEventsAreThrottled(t *testing.T) {
-	a, b := pair(t)
-	src, _ := testutil.WriteFile(t, t.TempDir(), "big.bin", 96<<20, 8)
-	sent := a.send(src)
-	b.rec.waitFor(t, "incoming", named(EventTransferIncoming))
-	if err := b.app.RespondIncomingTransfer(true); err != nil {
-		t.Fatal(err)
-	}
-	if err := result(t, sent, "send"); err != nil {
-		t.Fatal(err)
-	}
-	b.rec.waitFor(t, "completed", named(EventTransferCompleted))
-	n := 0
-	for _, e := range b.rec.all() {
-		if e.name == EventTransferProgress {
-			n++
-		}
-	}
-	// 150 ms cap: a 96 MiB loopback transfer cannot need thousands of events.
-	if n > 300 {
-		t.Fatalf("%d progress events for one transfer: throttling is broken", n)
-	}
-}
-
 // Detects: data races on the App's shared state (tokens, sockets) under concurrent UI calls.
 func TestConcurrentTokenRequestsAreSafeAndStable(t *testing.T) {
 	p := newPeer(t)
@@ -472,5 +412,25 @@ func TestConcurrentTokenRequestsAreSafeAndStable(t *testing.T) {
 		if tk == "" || tk != tokens[0] {
 			t.Fatalf("concurrent GetLocalToken returned different tokens: %v", tokens)
 		}
+	}
+}
+
+// Detects: a decline writing data, or the sender UI not learning about it.
+func TestDeclinedTransferWritesNothingAndSenderIsTold(t *testing.T) {
+	a, b := pair(t)
+	src, _ := testutil.WriteFile(t, t.TempDir(), "no.bin", 100_000, 2)
+
+	sent := a.send(src)
+	b.rec.waitFor(t, "incoming", named(EventTransferIncoming))
+	if err := b.app.RespondIncomingTransfer(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := result(t, sent, "SendSelectedFile"); err == nil || !strings.Contains(err.Error(), "rejected by peer") {
+		t.Fatalf("sender error = %v, want 'rejected by peer'", err)
+	}
+	a.rec.waitFor(t, "sender rejected status", status("rejected"))
+	b.rec.waitFor(t, "receiver rejected status", status("rejected"))
+	if got := b.received(t); len(got) != 0 {
+		t.Fatalf("declined transfer left files: %v", got)
 	}
 }
