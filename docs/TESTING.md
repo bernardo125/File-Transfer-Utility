@@ -11,6 +11,7 @@ Nothing needs the internet or privileges, except the opt-in `netem` layer.
 | Fuzzing | `make fuzz FUZZTIME=30s` | 4 targets: control frames, request decoding, token parsing, STUN parsing |
 | Benchmarks | `make bench` | reports allocations, never asserts on speed |
 | Static checks | `make lint`, `make vuln` | gofmt, `go vet`, govulncheck |
+| UI end-to-end | `cd frontend && npm run test:e2e` | real UI + real backends + real QUIC, see `frontend/e2e/README.md` |
 | Kernel impairment | `make netem` | needs Linux, root and `tc`; not run in CI by default |
 
 Packages are listed explicitly (`./internal/... ./pkg/cli/...`) because `pkg/ui` needs Wails/GTK and a built frontend.
