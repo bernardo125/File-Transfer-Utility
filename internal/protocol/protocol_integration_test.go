@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -304,3 +306,64 @@ func TestReceiverLoopHandlesSeveralFilesInOneSession(t *testing.T) {
 		}
 	}
 }
+
+// Detects: the sender telling the user "sent successfully" when the receiver reports that the
+// file arrived corrupted or could not be written. The receiver here is a scripted peer that
+// accepts the transfer, drains the payload and then answers with the given final status.
+func TestSenderReportsFailureWhenReceiverRejectsFinalIntegrityCheck(t *testing.T) {
+	for _, final := range []StatusCode{StatusConflict, StatusInternalError, StatusBadRequest} {
+		t.Run(statusName(final), func(t *testing.T) {
+			ca, cb, src, _ := session(t)
+			path, _ := testutil.WriteFile(t, src, "a.bin", 50_000, 8)
+			peerDone := make(chan error, 1)
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), guard)
+				defer cancel()
+				st, err := cb.AcceptStream(ctx)
+				if err != nil {
+					peerDone <- err
+					return
+				}
+				if _, err := ReceiveMetaDataRequest(st); err != nil {
+					peerDone <- err
+					return
+				}
+				if err := SendCodeResponse(StatusContinue, st); err != nil {
+					peerDone <- err
+					return
+				}
+				us, err := cb.AcceptUniStream(ctx)
+				if err != nil {
+					peerDone <- err
+					return
+				}
+				_, _ = io.Copy(io.Discard, us)
+				peerDone <- SendCodeResponse(final, st)
+			}()
+
+			errc := make(chan error, 1)
+			go func() { errc <- SendFileToPeer(ca, path) }()
+			select {
+			case err := <-errc:
+				if err == nil {
+					t.Fatalf("sender reported success although the receiver answered status %d", final)
+				}
+				if !strings.Contains(err.Error(), fmt.Sprint(int(final))) {
+					t.Fatalf("error %q does not tell the user the receiver's status %d", err, final)
+				}
+			case <-time.After(guard):
+				t.Fatal("sender hung waiting for the final status")
+			}
+			select {
+			case err := <-peerDone:
+				if err != nil {
+					t.Fatalf("scripted receiver: %v", err)
+				}
+			case <-time.After(guard):
+				t.Fatal("scripted receiver hung")
+			}
+		})
+	}
+}
+
+func statusName(c StatusCode) string { return fmt.Sprintf("status_%d", int(c)) }

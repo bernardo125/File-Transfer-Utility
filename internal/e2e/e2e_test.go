@@ -147,12 +147,14 @@ func TestTransferSurvivesImpairedNetwork(t *testing.T) {
 	cases := []struct {
 		name string
 		imp  testutil.Impairment
+		// the impairment this case promises; asserted against what the proxy really did
+		wantDropped, wantDuplicated, wantReordered bool
 	}{
-		{"latency_and_jitter", testutil.Impairment{Delay: 30 * time.Millisecond, Jitter: 20 * time.Millisecond, Seed: 1}},
-		{"packet_loss_5pct", testutil.Impairment{Loss: 0.05, Seed: 2}},
-		{"duplication_20pct", testutil.Impairment{Duplicate: 0.20, Seed: 3}},
-		{"reordering_20pct", testutil.Impairment{Reorder: 0.20, Delay: 5 * time.Millisecond, Seed: 4}},
-		{"everything_at_once", testutil.Impairment{Loss: 0.03, Duplicate: 0.05, Reorder: 0.10, Delay: 15 * time.Millisecond, Jitter: 10 * time.Millisecond, Seed: 5}},
+		{"latency_and_jitter", testutil.Impairment{Delay: 30 * time.Millisecond, Jitter: 20 * time.Millisecond, Seed: 1}, false, false, false},
+		{"packet_loss_5pct", testutil.Impairment{Loss: 0.05, Seed: 2}, true, false, false},
+		{"duplication_20pct", testutil.Impairment{Duplicate: 0.20, Seed: 3}, false, true, false},
+		{"reordering_20pct", testutil.Impairment{Reorder: 0.20, Delay: 5 * time.Millisecond, Seed: 4}, false, false, true},
+		{"everything_at_once", testutil.Impairment{Loss: 0.03, Duplicate: 0.05, Reorder: 0.10, Delay: 15 * time.Millisecond, Jitter: 10 * time.Millisecond, Seed: 5}, true, true, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -167,6 +169,15 @@ func TestTransferSurvivesImpairedNetwork(t *testing.T) {
 			path, sum := testutil.WriteFile(t, src, "data.bin", 512<<10, 42)
 			transfer(t, ca, cb, path)
 			assertReceived(t, dst, "data.bin", sum)
+
+			st := px.Stats()
+			t.Logf("proxy: %+v", st)
+			if st.Forwarded < 100 {
+				t.Fatalf("only %d datagrams crossed the proxy: the transfer did not really go through it", st.Forwarded)
+			}
+			if tc.wantDropped && st.Dropped == 0 || tc.wantDuplicated && st.Duplicated == 0 || tc.wantReordered && st.Reordered == 0 {
+				t.Fatalf("impairment never happened, test proves nothing: %+v", st)
+			}
 		})
 	}
 }

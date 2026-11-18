@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -135,6 +136,17 @@ type Proxy struct {
 	mu       sync.Mutex
 	timers   map[*time.Timer]struct{}
 	closed   bool
+
+	forwarded, dropped, duplicated, reordered atomic.Int64
+}
+
+// ProxyStats counts what the proxy actually did to the datagrams. Tests use it to prove the
+// impairment really happened (a "survives packet loss" test over a proxy that dropped nothing
+// would prove nothing).
+type ProxyStats struct{ Forwarded, Dropped, Duplicated, Reordered int64 }
+
+func (p *Proxy) Stats() ProxyStats {
+	return ProxyStats{p.forwarded.Load(), p.dropped.Load(), p.duplicated.Load(), p.reordered.Load()}
 }
 
 // NewProxy starts forwarding between a and b. Use AddrForA/AddrForB as the dial targets.
@@ -188,11 +200,13 @@ func (p *Proxy) pump(in, out *net.UDPConn, dst *net.UDPAddr, seed uint64) {
 			return
 		}
 		if rng.Float64() < p.imp.Loss {
+			p.dropped.Add(1)
 			continue
 		}
 		copies := 1
 		if rng.Float64() < p.imp.Duplicate {
 			copies = 2
+			p.duplicated.Add(1)
 		}
 		for i := 0; i < copies; i++ {
 			d := p.imp.Delay
@@ -201,7 +215,9 @@ func (p *Proxy) pump(in, out *net.UDPConn, dst *net.UDPAddr, seed uint64) {
 			}
 			if rng.Float64() < p.imp.Reorder {
 				d += 2*p.imp.Delay + 5*time.Millisecond
+				p.reordered.Add(1)
 			}
+			p.forwarded.Add(1)
 			pkt := append([]byte(nil), buf[:n]...)
 			p.send(out, dst, pkt, d)
 		}
