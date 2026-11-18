@@ -18,12 +18,14 @@ import (
 // ReceiverLoop waits for incoming QUIC streams from the peer and handles file transfer requests.
 func ReceiverLoop(conn *quic.Conn, reader *bufio.Reader) error {
 	info.PrintWaitingForTransfer()
-	stream, err := conn.AcceptStream(context.Background())
-	if err != nil {
-		return fmt.Errorf("ligação com o peer terminada: %w", err)
-	}
 
 	for {
+		// the sender opens a new control stream for every file, and HandleIncomingTransfer
+		// closes the one it was given, so each iteration must accept its own stream
+		stream, err := conn.AcceptStream(context.Background())
+		if err != nil {
+			return fmt.Errorf("ligação com o peer terminada: %w", err)
+		}
 
 		err = HandleIncomingTransfer(stream, conn, reader)
 		if err != nil {
