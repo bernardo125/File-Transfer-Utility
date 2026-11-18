@@ -9,7 +9,6 @@ import (
 	"ftu/internal/transfer"
 
 	"github.com/quic-go/quic-go"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func (a *App) startReceiverLoop() {
@@ -41,7 +40,7 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 		return
 	}
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferIncoming, IncomingTransferDTO{
+	a.emit(EventTransferIncoming, IncomingTransferDTO{
 		FileName: req.FileName,
 		FileSize: req.FileSize,
 		FileHash: req.FileHash,
@@ -56,7 +55,7 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 
 	if !accepted {
 		_ = protocol.SendCodeResponse(protocol.StatusForbidden, controlStream)
-		wailsruntime.EventsEmit(a.ctx, EventTransferStatus, "rejected")
+		a.emit(EventTransferStatus, "rejected")
 		return
 	}
 
@@ -65,8 +64,8 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 		return
 	}
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferStatus, "transferring")
-	wailsruntime.EventsEmit(a.ctx, EventTransferProgress, TransferProgressDTO{
+	a.emit(EventTransferStatus, "transferring")
+	a.emit(EventTransferProgress, TransferProgressDTO{
 		BytesTransferred: 0,
 		TotalBytes:       req.FileSize,
 		Percentage:       0,
@@ -85,7 +84,7 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 	written, err := transfer.ReceiveFile(destPath, conn, req.FileSize, req.FileHash, a.newProgressEmitter(req.FileSize))
 	if err != nil {
 		_ = protocol.SendCodeResponse(protocol.StatusConflict, controlStream)
-		wailsruntime.EventsEmit(a.ctx, EventTransferError, TransferErrorDTO{
+		a.emit(EventTransferError, TransferErrorDTO{
 			Code:    "RECEIVE_FAILED",
 			Message: err.Error(),
 		})
@@ -103,7 +102,7 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 	}
 	speedMBs := float64(written) / (1024 * 1024 * elapsed)
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferProgress, TransferProgressDTO{
+	a.emit(EventTransferProgress, TransferProgressDTO{
 		BytesTransferred: written,
 		TotalBytes:       req.FileSize,
 		Percentage:       100,
@@ -111,7 +110,7 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 		EtaSeconds:       0,
 	})
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferCompleted, TransferCompletedDTO{
+	a.emit(EventTransferCompleted, TransferCompletedDTO{
 		FileName:     destName,
 		DestPath:     destPath,
 		FileSize:     written,

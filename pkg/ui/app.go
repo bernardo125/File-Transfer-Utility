@@ -36,8 +36,8 @@ type App struct {
 	incomingDecisionCh chan bool
 	cancelConnect      context.CancelFunc
 	connectMu          sync.Mutex
+	emitter            func(event string, data ...any) // nil in production: events go through the Wails runtime
 }
-
 
 // NewApp creates a new App instance.
 func NewApp() *App {
@@ -88,7 +88,7 @@ func (a *App) GetMyToken() (string, error) {
 		return a.myToken, nil
 	}
 
-	wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+	a.emit(EventConnectionState, ConnectionStateDTO{
 		State:  "discovery",
 		Detail: "Resolving STUN and preparing local keys...",
 	})
@@ -100,7 +100,7 @@ func (a *App) GetMyToken() (string, error) {
 	a.myToken = token
 	a.myPrivKey = privKey
 
-	wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+	a.emit(EventConnectionState, ConnectionStateDTO{
 		State:  "ready",
 		Detail: "Signaling token ready to share",
 	})
@@ -130,10 +130,10 @@ func (a *App) CancelConnection() error {
 	}
 	a.mu.Unlock()
 
-	wailsruntime.EventsEmit(a.ctx, EventConnectionFailed, ConnectionFailedDTO{
+	a.emit(EventConnectionFailed, ConnectionFailedDTO{
 		Reason: "Ligação cancelada pelo utilizador",
 	})
-	wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+	a.emit(EventConnectionState, ConnectionStateDTO{
 		State:  "ready",
 		Detail: "Tentativa de ligação cancelada",
 	})
@@ -169,7 +169,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 	a.cancelConnect = cancel
 	a.connectMu.Unlock()
 
-	wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+	a.emit(EventConnectionState, ConnectionStateDTO{
 		State:  "hole_punching",
 		Detail: "Decoding token and starting UDP Hole Punching...",
 	})
@@ -177,10 +177,10 @@ func (a *App) ConnectPeer(peerToken string) error {
 	go func() {
 		peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, peerPubKey, err := discovery.GetPeer(peerToken)
 		if err != nil {
-			wailsruntime.EventsEmit(a.ctx, EventConnectionFailed, ConnectionFailedDTO{
+			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Token inválido: %v", err),
 			})
-			wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+			a.emit(EventConnectionState, ConnectionStateDTO{
 				State:  "error",
 				Detail: fmt.Sprintf("Token inválido: %v", err),
 			})
@@ -196,7 +196,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 		var punchResult connectivity.HolePunchResult
 		select {
 		case <-ctx.Done():
-			wailsruntime.EventsEmit(a.ctx, EventConnectionFailed, ConnectionFailedDTO{
+			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: "Ligação cancelada pelo utilizador",
 			})
 			return
@@ -204,17 +204,17 @@ func (a *App) ConnectPeer(peerToken string) error {
 		}
 
 		if punchResult.Err != nil {
-			wailsruntime.EventsEmit(a.ctx, EventConnectionFailed, ConnectionFailedDTO{
+			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Falha no Hole Punch: %v", punchResult.Err),
 			})
-			wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+			a.emit(EventConnectionState, ConnectionStateDTO{
 				State:  "error",
 				Detail: fmt.Sprintf("Falha no Hole Punch: %v", punchResult.Err),
 			})
 			return
 		}
 
-		wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+		a.emit(EventConnectionState, ConnectionStateDTO{
 			State:  "upgrading",
 			Detail: fmt.Sprintf("Hole punch com sucesso (%v). Upgrading para QUIC...", punchResult.Rtt),
 			RttMs:  punchResult.Rtt.Milliseconds(),
@@ -222,10 +222,10 @@ func (a *App) ConnectPeer(peerToken string) error {
 
 		quicConn, err := transport.QuicUpgrade(conn, punchResult.Addr, &privKey, peerPubKey)
 		if err != nil {
-			wailsruntime.EventsEmit(a.ctx, EventConnectionFailed, ConnectionFailedDTO{
+			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Falha no upgrade QUIC: %v", err),
 			})
-			wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+			a.emit(EventConnectionState, ConnectionStateDTO{
 				State:  "error",
 				Detail: fmt.Sprintf("Falha no upgrade QUIC: %v", err),
 			})
@@ -236,12 +236,12 @@ func (a *App) ConnectPeer(peerToken string) error {
 		a.quicConn = quicConn
 		a.mu.Unlock()
 
-		wailsruntime.EventsEmit(a.ctx, EventConnectionSuccess, ConnectionSuccessDTO{
+		a.emit(EventConnectionSuccess, ConnectionSuccessDTO{
 			Addr:  punchResult.Addr.String(),
 			RttMs: punchResult.Rtt.Milliseconds(),
 		})
 
-		wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+		a.emit(EventConnectionState, ConnectionStateDTO{
 			State:  "connected",
 			Detail: fmt.Sprintf("Conectado a %s", punchResult.Addr.String()),
 			RttMs:  punchResult.Rtt.Milliseconds(),
@@ -252,7 +252,6 @@ func (a *App) ConnectPeer(peerToken string) error {
 
 	return nil
 }
-
 
 // Disconnect cleanly shuts down the active connection and socket.
 func (a *App) Disconnect() error {
@@ -269,7 +268,7 @@ func (a *App) Disconnect() error {
 	}
 	a.myToken = ""
 
-	wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+	a.emit(EventConnectionState, ConnectionStateDTO{
 		State:  "idle",
 		Detail: "Disconnected",
 	})
@@ -343,7 +342,7 @@ func (a *App) SendSelectedFile(filePath string) error {
 	}
 	defer file.Close()
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferStatus, "requesting")
+	a.emit(EventTransferStatus, "requesting")
 
 	controlStream, err := conn.OpenStreamSync(context.Background())
 	if err != nil {
@@ -356,7 +355,7 @@ func (a *App) SendSelectedFile(filePath string) error {
 		return fmt.Errorf("failed to send metadata request: %w", err)
 	}
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferStatus, "waiting_approval")
+	a.emit(EventTransferStatus, "waiting_approval")
 
 	response, err := protocol.ReceiveMetadataResponse(controlStream)
 	if err != nil {
@@ -364,12 +363,12 @@ func (a *App) SendSelectedFile(filePath string) error {
 	}
 
 	if response.Status != protocol.StatusOK && response.Status != protocol.StatusContinue {
-		wailsruntime.EventsEmit(a.ctx, EventTransferStatus, "rejected")
+		a.emit(EventTransferStatus, "rejected")
 		return fmt.Errorf("transfer rejected by peer (status: %d)", response.Status)
 	}
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferStatus, "transferring")
-	wailsruntime.EventsEmit(a.ctx, EventTransferProgress, TransferProgressDTO{
+	a.emit(EventTransferStatus, "transferring")
+	a.emit(EventTransferProgress, TransferProgressDTO{
 		BytesTransferred: 0,
 		TotalBytes:       stats.Size(),
 		Percentage:       0,
@@ -378,14 +377,14 @@ func (a *App) SendSelectedFile(filePath string) error {
 	startTime := time.Now()
 	err = transfer.SendFile(file, conn, a.newProgressEmitter(stats.Size()))
 	if err != nil {
-		wailsruntime.EventsEmit(a.ctx, EventTransferError, TransferErrorDTO{
+		a.emit(EventTransferError, TransferErrorDTO{
 			Code:    "SEND_FAILED",
 			Message: err.Error(),
 		})
 		return fmt.Errorf("error during file streaming: %w", err)
 	}
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferStatus, "verifying")
+	a.emit(EventTransferStatus, "verifying")
 
 	finalStatus, err := protocol.ReceiveMetadataResponse(controlStream)
 	if err != nil {
@@ -393,7 +392,7 @@ func (a *App) SendSelectedFile(filePath string) error {
 	}
 
 	if finalStatus.Status != protocol.StatusOK {
-		wailsruntime.EventsEmit(a.ctx, EventTransferError, TransferErrorDTO{
+		a.emit(EventTransferError, TransferErrorDTO{
 			Code:    "INTEGRITY_FAILED",
 			Message: "Peer reported checksum verification failure",
 		})
@@ -406,7 +405,7 @@ func (a *App) SendSelectedFile(filePath string) error {
 	}
 	speedMBs := float64(stats.Size()) / (1024 * 1024 * elapsed)
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferProgress, TransferProgressDTO{
+	a.emit(EventTransferProgress, TransferProgressDTO{
 		BytesTransferred: stats.Size(),
 		TotalBytes:       stats.Size(),
 		Percentage:       100,
@@ -414,7 +413,7 @@ func (a *App) SendSelectedFile(filePath string) error {
 		EtaSeconds:       0,
 	})
 
-	wailsruntime.EventsEmit(a.ctx, EventTransferCompleted, TransferCompletedDTO{
+	a.emit(EventTransferCompleted, TransferCompletedDTO{
 		FileName:     stats.Name(),
 		DestPath:     filePath,
 		FileSize:     stats.Size(),
@@ -477,4 +476,3 @@ func (a *App) OpenGitHub() {
 		wailsruntime.BrowserOpenURL(a.ctx, "https://github.com/bernardo125/File-Transfer-Utility")
 	}
 }
-
