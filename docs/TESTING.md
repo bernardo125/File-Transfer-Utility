@@ -11,6 +11,7 @@ Nothing needs the internet or privileges, except the opt-in `netem` layer.
 | Fuzzing | `make fuzz FUZZTIME=30s` | 4 targets: control frames, request decoding, token parsing, STUN parsing |
 | Benchmarks | `make bench` | reports allocations, never asserts on speed |
 | Static checks | `make lint`, `make vuln` | gofmt, `go vet`, govulncheck |
+| Frontend unit | `make test-frontend` (or `cd frontend && npm test`) | Vitest: transfer-phase state machine and formatters |
 | UI end-to-end | `make test-ui` (or `cd tests/ui && npm test`) | real UI + real backends + real QUIC, see `tests/ui/README.md` |
 | Kernel impairment | `make netem` | needs Linux, root and `tc`; not run in CI by default |
 

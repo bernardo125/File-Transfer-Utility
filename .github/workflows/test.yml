@@ -23,6 +23,18 @@ jobs:
       - run: go vet $PKGS
       - run: go test -short -count=1 $PKGS
 
+  frontend-unit:
+    name: frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+
   integration-race:
     name: integration + e2e (race detector)
     runs-on: ubuntu-latest
