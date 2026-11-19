@@ -75,7 +75,8 @@ sequenceDiagram
     S-->>A: Public IP:port
     B->>S: Binding request
     S-->>B: Public IP:port
-    Note over A,B: Token = local addr + public addr + Ed25519 public key.<br/>Users swap tokens out of band (chat, email, ...)
+    Note over A,B: IPv6 (when available): the global address is read locally<br/>from the OS routing table. No STUN request, no NAT to map.
+    Note over A,B: Token = local addr + public addr + IPv6 addr (if any) + Ed25519 key.<br/>Users swap tokens out of band (chat, email, ...)
     par UDP hole punching on one shared socket
         A->>B: PUNCH (carries A's key)
         B->>A: PUNCH (carries B's key)
@@ -90,12 +91,14 @@ sequenceDiagram
 
 | Stage | What happens | Code |
 |---|---|---|
-| **Discovery** | One UDP socket asks a STUN server for its public address. The same socket is reused for everything that follows, which is what keeps the NAT mapping alive. | [`internal/discovery`](internal/discovery) |
+| **Discovery** | One UDP socket asks a STUN server for its public IPv4 address and port. If the machine has IPv6, its global address is read locally from the OS (no packet is sent). The same socket is reused for everything that follows, which is what keeps the NAT mapping alive. | [`internal/discovery`](internal/discovery) |
 | **Token** | Local address, public address (IPv4, plus IPv6 when available) and the peer's Ed25519 public key, packed into 44 to 62 bytes, encrypted with ChaCha20 and encoded as base64url. | [`signalingToken.go`](internal/discovery/signalingToken.go) |
 | **Hole punching** | Both sides send small `PUNCH` packets at all of the other's candidates in parallel (LAN, public IPv4, IPv6). The first packet carrying the expected key wins, so a same-LAN peer connects without leaving the network. | [`internal/connectivity`](internal/connectivity) |
 | **Secure channel** | QUIC over the punched socket. The roles (dialer or listener) are decided by comparing the two public keys, so no coordination is needed. Both certificates must hold exactly the key from the token. | [`internal/transport`](internal/transport) |
 | **Protocol** | A tiny HTTP-style exchange on a control stream (`uint32` length + JSON, capped at 64 KiB, status codes such as 100/200/403/409), then the payload on its own stream. | [`internal/protocol`](internal/protocol) |
 | **Transfer** | 64 KiB chunks written to disk while hashed; size is enforced; failures remove the partial file. | [`internal/transfer`](internal/transfer) |
+
+**Why IPv6 matters.** IPv6 addresses are globally routable, so there is no NAT mapping to guess and no STUN round trip. The token simply carries the peer's IPv6 address and port as one more candidate, tried in parallel with the IPv4 ones. Home routers still run a stateful firewall that drops unsolicited inbound packets, and the hole-punch does exactly what is needed there: each side sends first, which opens the pinhole for the other. With IPv6 on both ends the connection can therefore be direct even where IPv4 would sit behind a symmetric NAT or CGNAT. If only one side has IPv6, the apps fall back to the IPv4 candidates. (The automated tests run over IPv4 loopback, so the IPv6 path is implemented but not exercised by them.)
 
 Design notes (in Portuguese) with the reasoning behind each choice are in [`docs/notebook.md`](docs/notebook.md).
 
