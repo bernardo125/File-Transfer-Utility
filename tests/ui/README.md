@@ -40,3 +40,6 @@ Never CSS selectors, XPath or `nth()`. Never `waitForTimeout`: use web-first ass
 - Real NAT traversal across networks: both peers share one host (needs separate network namespaces or machines).
 - The native Wails window itself (title bar, native dialogs, drag and drop). A packaged-app smoke test on each OS is the way to cover it.
 - Browser engines other than Chromium locally; WebKit runs in CI.
+
+## README demo video
+`npm run docs:video` records `docs/media/demo.mp4`: one window, the receiver's point of view, driven against the real backends (the sender runs in an unrecorded second window). It needs `ffmpeg` on PATH, or `pip install imageio-ffmpeg`.
