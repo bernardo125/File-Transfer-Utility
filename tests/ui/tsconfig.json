@@ -9,5 +9,5 @@
     "types": ["node"],
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["specs", "fixtures", "pages", "playwright.config.ts"]
+  "include": ["specs", "docs", "fixtures", "pages", "playwright.config.ts"]
 }

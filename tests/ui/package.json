@@ -9,7 +9,8 @@
     "test": "npm run build:frontend && playwright test",
     "test:ui": "npm run build:frontend && playwright test --ui",
     "report": "playwright show-report",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "docs:media": "npm run build:frontend && playwright test -c playwright.docs.config.ts && python3 docs/make_gif.py"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.0",
