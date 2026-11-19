@@ -75,6 +75,9 @@ func SendFileToPeer(conn *quic.Conn, filePath string) error {
 
 	// read receiver response code
 	response, err := ReceiveMetadataResponse(controlStream)
+	if err != nil {
+		return fmt.Errorf("erro ao ler resposta do destinatário: %w", err)
+	}
 	if response.Status != StatusOK && response.Status != StatusContinue {
 		return fmt.Errorf("transferência recusada pelo destinatário (Status: %d)", response.Status)
 	}
@@ -96,7 +99,7 @@ func SendFileToPeer(conn *quic.Conn, filePath string) error {
 	}
 
 	if finalStatus.Status != StatusOK {
-		return fmt.Errorf("destinatário reportou falha na verificação de integridade (Status: %d)", finalStatus)
+		return fmt.Errorf("destinatário reportou falha na verificação de integridade (Status: %d)", finalStatus.Status)
 	}
 
 	log.Println("[Sender] Destinatário validou com sucesso a integridade do ficheiro!")

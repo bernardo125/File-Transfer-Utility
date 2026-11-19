@@ -39,7 +39,8 @@ func AskPeerToken(reader *bufio.Reader) (string, error) {
 		fmt.Print("Type your friend's token: ")
 		token, err := reader.ReadString('\n')
 		if err != nil {
-			continue
+			// input closed (EOF): retrying would spin forever
+			return "", err
 		}
 
 		token = strings.TrimSpace(token)

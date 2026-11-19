@@ -34,6 +34,7 @@ type HolePuncher struct {
 	myPublicKey           []byte
 	otherPeerPublicKey    []byte
 	resultCh              chan HolePunchResult
+	done                  chan struct{} // closed when the punch finished; stops all probes
 }
 
 // struct that will be returned to start send chunks
@@ -48,11 +49,15 @@ func getDefaultConfig() (config HolePunchConfig) {
 }
 
 func UDPHolePunch(conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
-	defaultConfig := getDefaultConfig()
+	return udpHolePunch(getDefaultConfig(), conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
+}
+
+// udpHolePunch is UDPHolePunch with an injectable configuration (lets tests use short timeouts).
+func udpHolePunch(defaultConfig HolePunchConfig, conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
 		peerLocalAddressIPV4: peerLocalIPV4, peerRemoteAddressIPV4: peerRemoteIPV4, peerPublicAddressIPV6: peerPublicIPV6,
-		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult, 1)}
+		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult, 1), done: make(chan struct{})}
 
 	// test if is the same address
 	if isMyOwnPC(&punch.myPublicKey, &punch.otherPeerPublicKey) {
@@ -84,21 +89,25 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr, myPublicKey []byte) {
 	probeMessage := make([]byte, 33)
 	probeMessage[0] = PUNCH
 	copy(probeMessage[1:33], myPublicKey)
+	if addr == nil {
+		return
+	}
+	ticker := time.NewTicker(punch.config.ProbeInterval)
+	defer ticker.Stop()
 	for i := 0; i < punch.config.MaxAttempts; i++ {
-
-		_, err := punch.socket.WriteToUDP(probeMessage, addr)
-
-		if err != nil {
-			_ = err // some probes will fail, that's expected
-			continue
+		// some probes will fail, that's expected; keep pacing so a failing route is not hammered
+		_, _ = punch.socket.WriteToUDP(probeMessage, addr)
+		select {
+		case <-punch.done:
+			return
+		case <-ticker.C:
 		}
-		time.Sleep(punch.config.ProbeInterval)
-		// the address that work will go to channel
 	}
 
 }
 
 func (punch *HolePuncher) listenPeer() {
+	defer close(punch.done)                         // stop probing as soon as we have a verdict
 	defer punch.socket.SetReadDeadline(time.Time{}) // socket without time out to QUIC
 	buffer := make([]byte, 256)
 
@@ -112,10 +121,15 @@ func (punch *HolePuncher) listenPeer() {
 			return
 		}
 
+		// a closed socket never recovers: report it instead of spinning forever
+		if err != nil && errors.Is(err, net.ErrClosed) {
+			punch.resultCh <- HolePunchResult{Addr: nil, Err: err}
+			return
+		}
 		msg := buffer[:n]
 
 		//otherwise continue looping
-		if n < 5 || msg[0] != PUNCH {
+		if n < 33 || msg[0] != PUNCH {
 			continue
 		}
 		isExpectedToken := bytes.Equal(msg[1:33], punch.otherPeerPublicKey)

@@ -110,6 +110,9 @@ func SendFile(file *os.File, conn *quic.Conn, onProgress ProgressFunc) error {
 // and validates its SHA256 checksum on-the-fly. If verification fails, the partial/corrupted file is deleted.
 // onProgress is optional and reports bytes received from the peer.
 func ReceiveFile(destPath string, conn *quic.Conn, expectedSize int64, expectedHash string, onProgress ProgressFunc) (int64, error) {
+	if expectedSize < 0 {
+		return 0, fmt.Errorf("invalid expected size %d", expectedSize)
+	}
 	newFile, err := os.Create(destPath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create destination file: %w", err)
@@ -120,15 +123,19 @@ func ReceiveFile(destPath string, conn *quic.Conn, expectedSize int64, expectedH
 	writer := io.MultiWriter(newFile, hasher)
 
 	dataStream, err := conn.AcceptUniStream(context.Background())
+	if err != nil {
+		newFile.Close()
+		_ = os.Remove(destPath)
+		return 0, fmt.Errorf("failed to accept data stream: %w", err)
+	}
 
 	log.Printf("[Transfer] Receiving file payload (expected %d bytes)...", expectedSize)
 	start := time.Now()
 
 	buf := make([]byte, transferBufferSize)
-	var src io.Reader = dataStream
-	if expectedSize > 0 {
-		src = io.LimitReader(dataStream, expectedSize)
-	}
+	// Always bound the read to the announced size (including 0 for empty files) so a
+	// misbehaving sender cannot stream unbounded data to disk.
+	src := io.LimitReader(dataStream, expectedSize)
 
 	written, err := io.CopyBuffer(writer, withProgress(src, onProgress), buf)
 	if err != nil {
@@ -137,7 +144,7 @@ func ReceiveFile(destPath string, conn *quic.Conn, expectedSize int64, expectedH
 		return written, fmt.Errorf("failed to read stream data: %w", err)
 	}
 
-	if expectedSize > 0 && written != expectedSize {
+	if written != expectedSize {
 		newFile.Close()
 		_ = os.Remove(destPath)
 		return written, fmt.Errorf("incomplete file transfer: expected %d bytes, got %d bytes", expectedSize, written)

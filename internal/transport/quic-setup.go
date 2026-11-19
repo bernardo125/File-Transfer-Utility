@@ -32,6 +32,10 @@ func generateTLSConfig(priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.Pub
 		}},
 		NextProtos:         []string{"quic-echo-example"},
 		InsecureSkipVerify: true, // hostname check disabled; chain verified below
+		// Without this the listening side never asks the dialer for a certificate, so
+		// VerifyPeerCertificate would only ever run on the dialer and any host able to
+		// reach the UDP port could open a session. Mutual authentication is required.
+		ClientAuth: tls.RequireAnyClientCert,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
 				return errors.New("peer sent no certificate")
@@ -53,6 +57,9 @@ func generateTLSConfig(priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.Pub
 	}
 }
 
+// handshakeTimeout bounds how long either side waits for the QUIC handshake.
+const handshakeTimeout = 15 * time.Second
+
 // udp upgrade to quic comunication to send data
 func QuicUpgrade(mySocket *net.UDPConn, destination *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
 
@@ -60,15 +67,15 @@ func QuicUpgrade(mySocket *net.UDPConn, destination *net.UDPAddr, privateKey *ed
 	// if my public key is higher than other peer i will be listener, else dialer
 	myPublicKey := privateKey.Public().(ed25519.PublicKey)
 	if bytes.Compare(myPublicKey, *otherPeerPublicKey) > 0 {
-		return quicDoListen(mySocket, privateKey, otherPeerPublicKey)
+		return quicDoListen(mySocket, privateKey, otherPeerPublicKey, handshakeTimeout)
 	} else {
-		return quicDoDial(mySocket, destination, privateKey, otherPeerPublicKey)
+		return quicDoDial(mySocket, destination, privateKey, otherPeerPublicKey, handshakeTimeout)
 	}
 
 }
 
-func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey, timeout time.Duration) (*quic.Conn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// start tls self certificate to secure data transfer
@@ -83,13 +90,13 @@ func quicDoDial(mySocket *net.UDPConn, destination *net.UDPAddr, priv *ed25519.P
 
 }
 
-func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
+func quicDoListen(mySocket *net.UDPConn, priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey, timeout time.Duration) (*quic.Conn, error) {
 	listener, err := quic.Listen(mySocket, generateTLSConfig(priv, otherPeerPublicKey), defaultQuicConfig())
 	if err != nil {
 		return nil, err
 	}
 	defer listener.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	conn, err := listener.Accept(ctx)
