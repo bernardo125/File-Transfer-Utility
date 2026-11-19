@@ -26,9 +26,7 @@
 
 <br>
 
-<video src="docs/media/demo.mp4" controls muted width="820"></video>
-
-<sub>If the video does not play inline, <a href="docs/media/demo.mp4"><b>watch the 40-second demo</b></a>.</sub>
+<img src="docs/media/demo.gif" alt="Demo: two peers exchange tokens, connect, and a 400 MB file streams from one to the other with live progress" width="820">
 
 </div>
 
@@ -49,7 +47,13 @@ The only external service is a **public STUN server**, used solely to learn your
 
 ## Demo
 
-The video above shows a real transfer from the receiver's side: pick **Receive**, paste the sender's token, connect, accept an incoming 600 MB file and watch it stream with live speed, ETA and SHA-256 verification. It is recorded from the real app (two real backends talking over QUIC) by `npm run docs:video` in [`tests/ui`](tests/ui), so it can be regenerated whenever the UI changes.
+| 1. Choose a role | 2. Swap tokens |
+|:--:|:--:|
+| <img src="docs/media/01-home.png" alt="Home screen with Send and Receive" width="400"> | <img src="docs/media/02-pairing.png" alt="Pairing screen showing your token and a field for the peer token" width="400"> |
+| **3. Offer a file** | **4. Stream directly** |
+| <img src="docs/media/04-incoming.png" alt="Receiver sees the incoming file and can accept or decline" width="400"> | <img src="docs/media/05-transferring.png" alt="Live progress with speed, ETA and SHA-256" width="400"> |
+
+> These images are generated from the real app (two real backends talking over QUIC) by `npm run docs:media` in [`tests/ui`](tests/ui), so they never drift from the UI.
 
 ### How to use it
 
