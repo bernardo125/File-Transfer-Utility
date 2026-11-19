@@ -10,6 +10,7 @@
 
 [![CI](https://github.com/bernardo125/File-Transfer-Utility/actions/workflows/test.yml/badge.svg)](https://github.com/bernardo125/File-Transfer-Utility/actions/workflows/test.yml)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![QUIC](https://img.shields.io/badge/transport-QUIC%20%2B%20TLS%201.3-1f8434)](#how-it-works)
 [![Identity](https://img.shields.io/badge/identity-Ed25519-1f8434)](#security-model)
 [![Desktop](https://img.shields.io/badge/desktop-Wails%20%2B%20React-df0000)](#getting-started)
@@ -122,7 +123,7 @@ File Throw is deliberately **TURN-free**: relays that are free have tiny bandwid
 | Symmetric NAT or carrier-grade NAT on either side | **No.** The mapping differs per destination, so the punch cannot succeed. Roughly 15-20% of internet users are in this situation. |
 | Resume after a dropped connection | Not supported: start a new session |
 
-Other known limits: one file at a time per session, and no license file yet (add one before redistributing).
+Other known limit: one file at a time per session.
 
 ## Getting started
 
@@ -176,6 +177,10 @@ Details, environment notes and the list of what is *not* covered are in [`docs/T
 ├── docs/                 design notebook, testing guide, accessibility matrix, media
 └── assets/               logo
 ```
+
+## License
+
+Released under the [MIT License](LICENSE).
 
 ## Author
 
