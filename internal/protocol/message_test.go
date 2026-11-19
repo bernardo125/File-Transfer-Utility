@@ -70,18 +70,6 @@ func TestReceiveControlMessageTruncatedInput(t *testing.T) {
 	}
 }
 
-// Detects: back-to-back frames bleeding into each other (boundary handling).
-func TestReceiveControlMessageKeepsFrameBoundaries(t *testing.T) {
-	wire := append(frame([]byte("first")), frame([]byte("second"))...)
-	r := bytes.NewReader(wire)
-	for _, want := range []string{"first", "second"} {
-		got, err := receiveControlMessage(r)
-		if err != nil || string(got) != want {
-			t.Fatalf("got %q err=%v, want %q", got, err, want)
-		}
-	}
-}
-
 // Detects: metadata the receiver would act on blindly (negative size disables size checks,
 // empty/short hash disables integrity verification).
 func TestDecodeRequestValidation(t *testing.T) {

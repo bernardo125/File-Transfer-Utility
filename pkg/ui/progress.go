@@ -6,7 +6,6 @@ import (
 	"ftu/internal/transfer"
 
 	"github.com/quic-go/quic-go"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // progressEmitInterval caps how often transfer:progress events reach the frontend.
@@ -41,7 +40,7 @@ func (a *App) newProgressEmitter(totalBytes int64) transfer.ProgressFunc {
 			percentage = float64(done) / float64(totalBytes) * 100
 		}
 
-		wailsruntime.EventsEmit(a.ctx, EventTransferProgress, TransferProgressDTO{
+		a.emit(EventTransferProgress, TransferProgressDTO{
 			BytesTransferred: done,
 			TotalBytes:       totalBytes,
 			Percentage:       percentage,
@@ -60,7 +59,7 @@ func (a *App) notifyPeerLost(conn *quic.Conn) {
 	if !current {
 		return
 	}
-	wailsruntime.EventsEmit(a.ctx, EventConnectionState, ConnectionStateDTO{
+	a.emit(EventConnectionState, ConnectionStateDTO{
 		State:  "error",
 		Detail: "Peer disconnected",
 	})

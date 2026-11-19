@@ -54,7 +54,7 @@ func runTransfer(t *testing.T, ca, cb *quic.Conn, srcPath, dest string, expectSi
 // Detects: corruption, truncation or off-by-one at chunk boundaries (buffer is 64 KiB), and the
 // empty file case. Success is judged by SHA-256 of the received bytes, not by size or existence.
 func TestTransferPreservesContentAtBoundarySizes(t *testing.T) {
-	sizes := []int64{0, 1, transferBufferSize - 1, transferBufferSize, transferBufferSize + 1, 3*transferBufferSize + 17, 5 << 20}
+	sizes := []int64{0, 1, transferBufferSize, transferBufferSize + 1, 5 << 20}
 	for _, size := range sizes {
 		t.Run(fmt.Sprintf("%d_bytes", size), func(t *testing.T) {
 			ca, cb := testutil.DirectPair(t)

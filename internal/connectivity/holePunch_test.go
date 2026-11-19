@@ -155,15 +155,6 @@ func TestHolePunchSurvivesMalformedDatagrams(t *testing.T) {
 	}
 }
 
-// Detects: connecting a peer to itself (pasting your own token).
-func TestHolePunchRejectsOwnToken(t *testing.T) {
-	a := newNode(t)
-	res := wait(t, udpHolePunch(testConfig(time.Second), a.conn, a.addr(), a.addr(), nil, &a.priv, &a.pub))
-	if !errors.Is(res.Err, ErrSameAdress) {
-		t.Fatalf("err = %v, want ErrSameAdress", res.Err)
-	}
-}
-
 // Detects: listenPeer spinning forever (or hanging) when the socket is closed under it.
 func TestHolePunchReportsClosedSocket(t *testing.T) {
 	a, b := newNode(t), newNode(t)
@@ -197,5 +188,14 @@ func TestHolePunchStopsProbingAfterVerdict(t *testing.T) {
 	b.conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
 	if n, _, err := b.conn.ReadFromUDP(buf); err == nil {
 		t.Fatalf("still receiving probes (%d bytes) after hole punch finished", n)
+	}
+}
+
+// Detects: connecting a peer to itself (pasting your own token).
+func TestHolePunchRejectsOwnToken(t *testing.T) {
+	a := newNode(t)
+	res := wait(t, udpHolePunch(testConfig(time.Second), a.conn, a.addr(), a.addr(), nil, &a.priv, &a.pub))
+	if !errors.Is(res.Err, ErrSameAdress) {
+		t.Fatalf("err = %v, want ErrSameAdress", res.Err)
 	}
 }

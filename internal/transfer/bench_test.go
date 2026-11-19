@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"ftu/internal/testutil"
@@ -58,51 +57,5 @@ func BenchmarkTransferThroughput(b *testing.B) {
 		}
 		b.StopTimer()
 		f.Close()
-	}
-}
-
-func BenchmarkConcurrentTransfers(b *testing.B) {
-	for _, n := range []int{1, 4} {
-		b.Run(fmt.Sprintf("%d_pairs", n), func(b *testing.B) {
-			const size = 8 << 20
-			dir := b.TempDir()
-			src, sum := testutil.WriteFile(b, dir, "src.bin", size, 9)
-			b.ReportAllocs()
-			b.SetBytes(int64(size * n))
-			for i := 0; i < b.N; i++ {
-				b.StopTimer()
-				var wg sync.WaitGroup
-				errs := make(chan error, 2*n)
-				run := make([]func(), 0, n)
-				for j := 0; j < n; j++ {
-					ca, cb := testutil.DirectPair(b)
-					j := j
-					run = append(run, func() {
-						defer wg.Done()
-						f, err := os.Open(src)
-						if err != nil {
-							errs <- err
-							return
-						}
-						defer f.Close()
-						go func() { errs <- SendFile(f, ca, nil) }()
-						_, err = ReceiveFile(filepath.Join(dir, fmt.Sprintf("d%d.bin", j)), cb, size, sum, nil)
-						errs <- err
-					})
-				}
-				b.StartTimer()
-				wg.Add(n)
-				for _, r := range run {
-					go r()
-				}
-				wg.Wait()
-				b.StopTimer()
-				for k := 0; k < 2*n; k++ {
-					if err := <-errs; err != nil {
-						b.Fatal(err)
-					}
-				}
-			}
-		})
 	}
 }

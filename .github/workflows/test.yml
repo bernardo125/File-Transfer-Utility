@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  PKGS: ./internal/... ./pkg/cli/...
+  PKGS: ./internal/... ./pkg/cli/... ./tests/...
 
 jobs:
   fast:
@@ -22,6 +22,18 @@ jobs:
       - run: test -z "$(gofmt -l internal pkg/cli)"
       - run: go vet $PKGS
       - run: go test -short -count=1 $PKGS
+
+  frontend-unit:
+    name: frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
 
   integration-race:
     name: integration + e2e (race detector)
@@ -51,6 +63,38 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest $PKGS
+
+  e2e-ui:
+    name: UI end-to-end (real backends, ${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    needs: fast
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: |
+            frontend/package-lock.json
+            tests/ui/package-lock.json }
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: tests/ui
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+        working-directory: tests/ui
+      - run: npm run build:frontend && npx playwright test --project=${{ matrix.browser }}
+        working-directory: tests/ui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-${{ matrix.browser }}
+          path: |
+            tests/ui/playwright-report
+            tests/ui/test-results
 
   bench:
     name: benchmarks (informational, manual)

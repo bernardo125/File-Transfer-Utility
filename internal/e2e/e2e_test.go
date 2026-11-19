@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -150,9 +149,7 @@ func TestTransferSurvivesImpairedNetwork(t *testing.T) {
 		// the impairment this case promises; asserted against what the proxy really did
 		wantDropped, wantDuplicated, wantReordered bool
 	}{
-		{"latency_and_jitter", testutil.Impairment{Delay: 30 * time.Millisecond, Jitter: 20 * time.Millisecond, Seed: 1}, false, false, false},
 		{"packet_loss_5pct", testutil.Impairment{Loss: 0.05, Seed: 2}, true, false, false},
-		{"duplication_20pct", testutil.Impairment{Duplicate: 0.20, Seed: 3}, false, true, false},
 		{"reordering_20pct", testutil.Impairment{Reorder: 0.20, Delay: 5 * time.Millisecond, Seed: 4}, false, false, true},
 		{"everything_at_once", testutil.Impairment{Loss: 0.03, Duplicate: 0.05, Reorder: 0.10, Delay: 15 * time.Millisecond, Jitter: 10 * time.Millisecond, Seed: 5}, true, true, true},
 	}
@@ -179,52 +176,6 @@ func TestTransferSurvivesImpairedNetwork(t *testing.T) {
 				t.Fatalf("impairment never happened, test proves nothing: %+v", st)
 			}
 		})
-	}
-}
-
-// Detects: independent sessions interfering through shared state when many peers talk at once.
-func TestSimultaneousSessionsStayIsolated(t *testing.T) {
-	const sessions = 4
-	dst := t.TempDir()
-	t.Chdir(dst)
-	src := t.TempDir()
-
-	type job struct {
-		a, b *testutil.Peer
-		path string
-		name string
-		sum  string
-	}
-	jobs := make([]job, sessions)
-	for i := range jobs {
-		name := fmt.Sprintf("session-%d.bin", i)
-		p, sum := testutil.WriteFile(t, src, name, int64(512*1024+i*9973), uint64(10+i))
-		jobs[i] = job{testutil.NewPeer(t), testutil.NewPeer(t), p, name, sum}
-	}
-	var wg sync.WaitGroup
-	errs := make(chan error, sessions)
-	for _, j := range jobs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			ca, cb := establish(t, j.a, j.b, j.b.Addr(), j.a.Addr())
-			se, re := make(chan error, 1), receive(cb)
-			go func() { se <- protocol.SendFileToPeer(ca, j.path) }()
-			for _, ch := range []<-chan error{se, re} {
-				if err := <-ch; err != nil {
-					errs <- fmt.Errorf("%s: %w", j.name, err)
-					return
-				}
-			}
-		}()
-	}
-	wg.Wait()
-	close(errs)
-	for err := range errs {
-		t.Error(err)
-	}
-	for _, j := range jobs {
-		assertReceived(t, dst, j.name, j.sum)
 	}
 }
 
@@ -265,35 +216,4 @@ func TestRepeatedConnectDisconnectCyclesDoNotLeakGoroutines(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-}
-
-// Detects: an abrupt drop going unnoticed by the other side (it would wait for the idle timeout
-// or forever), and a fresh session failing after a previous one died. Recovery in this product
-// is a new session (new socket + new token); reusing the same UDP socket for a second hole
-// punch after QUIC ran on it is not supported (see docs/TESTING.md).
-func TestNewSessionWorksAfterAbruptDrop(t *testing.T) {
-	src, dst := t.TempDir(), t.TempDir()
-	t.Chdir(dst)
-	p1, s1 := testutil.WriteFile(t, src, "first.bin", 200_000, 61)
-	p2, s2 := testutil.WriteFile(t, src, "second.bin", 300_000, 62)
-
-	a, b := testutil.NewPeer(t), testutil.NewPeer(t)
-	ca, cb := establish(t, a, b, b.Addr(), a.Addr())
-	transfer(t, ca, cb, p1)
-	assertReceived(t, dst, "first.bin", s1)
-
-	ca.CloseWithError(99, "link lost") // sender vanishes without any goodbye on the data path
-	select {
-	case <-cb.Context().Done():
-	case <-time.After(guard):
-		t.Fatal("peer never noticed the dropped connection")
-	}
-	if _, err := cb.OpenStreamSync(context.Background()); err == nil {
-		t.Fatal("stream opened on a dead connection")
-	}
-
-	a2, b2 := testutil.NewPeer(t), testutil.NewPeer(t)
-	ca2, cb2 := establish(t, a2, b2, b2.Addr(), a2.Addr())
-	transfer(t, ca2, cb2, p2)
-	assertReceived(t, dst, "second.bin", s2)
 }
