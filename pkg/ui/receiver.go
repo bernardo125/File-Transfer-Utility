@@ -72,6 +72,15 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 		return
 	}
 
+	a.mu.Lock()
+	dir := a.downloadDir
+	a.mu.Unlock()
+	if err := transfer.EnsureFreeSpace(dir, req.FileSize); err != nil {
+		_ = protocol.SendCodeResponse(protocol.StatusNotAcceptable, controlStream)
+		a.emit(EventTransferError, TransferErrorDTO{Code: "NO_SPACE", Message: err.Error()})
+		return
+	}
+
 	err = protocol.SendCodeResponse(protocol.StatusContinue, controlStream)
 	if err != nil {
 		return
@@ -84,25 +93,21 @@ func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) 
 		Percentage:       0,
 	})
 
-	destName := filepath.Base(req.FileName)
-	if destName == "" || destName == "." || destName == "/" {
-		destName = "received_file"
-	}
-
 	a.mu.Lock()
-	destPath := filepath.Join(a.downloadDir, destName)
+	downloadDir := a.downloadDir
 	a.mu.Unlock()
 
 	start := time.Now()
-	written, err := transfer.ReceiveFile(destPath, conn, req.FileSize, req.FileHash, a.newProgressEmitter(req.FileSize))
+	destPath, written, err := transfer.ReceiveFile(downloadDir, req.FileName, conn, req.FileSize, req.FileHash, a.newProgressEmitter(req.FileSize))
 	if err != nil {
-		_ = protocol.SendCodeResponse(protocol.StatusConflict, controlStream)
+		_ = protocol.SendCodeResponse(protocol.StatusForReceiveError(err), controlStream)
 		a.emit(EventTransferError, TransferErrorDTO{
 			Code:    "RECEIVE_FAILED",
 			Message: err.Error(),
 		})
 		return
 	}
+	destName := filepath.Base(destPath)
 
 	err = protocol.SendCodeResponse(protocol.StatusOK, controlStream)
 	if err != nil {

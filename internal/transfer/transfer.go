@@ -1,8 +1,6 @@
 package transfer
 
 import (
-	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
@@ -104,70 +102,4 @@ func SendFile(file *os.File, conn *quic.Conn, onProgress ProgressFunc) error {
 	speedMBs := float64(written) / (1024 * 1024 * elapsed)
 	log.Printf("[Transfer] Finished sending %d bytes in %.2f seconds (%.2f MB/s)", written, elapsed, speedMBs)
 	return nil
-}
-
-// ReceiveFile reads file payload from the QUIC stream, writes it to disk in chunks,
-// and validates its SHA256 checksum on-the-fly. If verification fails, the partial/corrupted file is deleted.
-// onProgress is optional and reports bytes received from the peer.
-func ReceiveFile(destPath string, conn *quic.Conn, expectedSize int64, expectedHash string, onProgress ProgressFunc) (int64, error) {
-	if expectedSize < 0 {
-		return 0, fmt.Errorf("invalid expected size %d", expectedSize)
-	}
-	newFile, err := os.Create(destPath)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create destination file: %w", err)
-	}
-
-	// Hash on-the-fly while saving chunks to disk
-	hasher := sha256.New()
-	writer := io.MultiWriter(newFile, hasher)
-
-	dataStream, err := conn.AcceptUniStream(context.Background())
-	if err != nil {
-		newFile.Close()
-		_ = os.Remove(destPath)
-		return 0, fmt.Errorf("failed to accept data stream: %w", err)
-	}
-
-	log.Printf("[Transfer] Receiving file payload (expected %d bytes)...", expectedSize)
-	start := time.Now()
-
-	buf := make([]byte, transferBufferSize)
-	// Always bound the read to the announced size (including 0 for empty files) so a
-	// misbehaving sender cannot stream unbounded data to disk.
-	src := io.LimitReader(dataStream, expectedSize)
-
-	written, err := io.CopyBuffer(writer, withProgress(src, onProgress), buf)
-	if err != nil {
-		newFile.Close()
-		_ = os.Remove(destPath)
-		return written, fmt.Errorf("failed to read stream data: %w", err)
-	}
-
-	if written != expectedSize {
-		newFile.Close()
-		_ = os.Remove(destPath)
-		return written, fmt.Errorf("incomplete file transfer: expected %d bytes, got %d bytes", expectedSize, written)
-	}
-
-	if err := newFile.Sync(); err != nil {
-		newFile.Close()
-		_ = os.Remove(destPath)
-		return written, fmt.Errorf("failed to flush file to disk: %w", err)
-	}
-	newFile.Close()
-
-	calculatedHash := fmt.Sprintf("%x", hasher.Sum(nil))
-	if expectedHash != "" && calculatedHash != expectedHash {
-		_ = os.Remove(destPath)
-		return written, fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, calculatedHash)
-	}
-
-	elapsed := time.Since(start).Seconds()
-	if elapsed <= 0 {
-		elapsed = 0.001
-	}
-	speedMBs := float64(written) / (1024 * 1024 * elapsed)
-	log.Printf("[Transfer] Successfully received %d bytes in %.2f seconds (%.2f MB/s). Checksum verified!", written, elapsed, speedMBs)
-	return written, nil
 }

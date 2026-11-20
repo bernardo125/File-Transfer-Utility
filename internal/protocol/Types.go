@@ -1,5 +1,11 @@
 package protocol
 
+import (
+	"errors"
+
+	"ftu/internal/transfer"
+)
+
 type Method string
 type StatusCode int
 
@@ -23,3 +29,17 @@ const (
 	StatusClientClosed  StatusCode = 499 // cancelled by sender
 	StatusInternalError StatusCode = 500 // I/O failure
 )
+
+// StatusForReceiveError maps a receive failure to the status sent back to the sender:
+// 409 only for an integrity failure (hash/size mismatch), 406 when the disk is full,
+// 500 for every other I/O problem.
+func StatusForReceiveError(err error) StatusCode {
+	switch {
+	case errors.Is(err, transfer.ErrIntegrity):
+		return StatusConflict
+	case errors.Is(err, transfer.ErrInsufficientSpace):
+		return StatusNotAcceptable
+	default:
+		return StatusInternalError
+	}
+}

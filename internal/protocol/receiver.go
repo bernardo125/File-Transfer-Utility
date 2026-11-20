@@ -68,27 +68,27 @@ func HandleIncomingTransfer(controlStream *quic.Stream, conn *quic.Conn, reader 
 		return nil
 	}
 
+	if err := transfer.EnsureFreeSpace(".", req.FileSize); err != nil {
+		SendCodeResponse(StatusNotAcceptable, controlStream)
+		return fmt.Errorf("sem espaço em disco: %w", err)
+	}
+
 	// send acceptance response
 	err = SendCodeResponse(StatusContinue, controlStream)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[Receiver] A receber '%s'...", req.FileName)
+	log.Printf("[Receiver] A receber %q...", req.FileName)
 
-	// sanitize destination file name (save in current directory)
-	destFileName := filepath.Base(req.FileName)
-	if destFileName == "." || destFileName == "/" || destFileName == "" {
-		destFileName = "received_file"
-	}
-
-	// receive file body via transfer module and verify checksum on the fly
-	_, err = transfer.ReceiveFile(destFileName, conn, req.FileSize, req.FileHash, nil)
+	// receive file body via transfer module (temp file, size + SHA-256 verified, never overwrites)
+	finalPath, _, err := transfer.ReceiveFile(".", req.FileName, conn, req.FileSize, req.FileHash, nil)
 	if err != nil {
 		log.Printf("[Receiver] Erro na recepção ou verificação de integridade: %v", err)
-		SendCodeResponse(StatusConflict, controlStream)
+		SendCodeResponse(StatusForReceiveError(err), controlStream)
 		return fmt.Errorf("falha ao gravar ou validar ficheiro: %w", err)
 	}
+	destFileName := filepath.Base(finalPath)
 
 	// notify sender that transfer and checksum verification completed successfully
 	err = SendCodeResponse(StatusOK, controlStream)
@@ -96,7 +96,7 @@ func HandleIncomingTransfer(controlStream *quic.Stream, conn *quic.Conn, reader 
 		return err
 	}
 
-	log.Printf("[Receiver] Ficheiro '%s' transferido e validado com sucesso!", destFileName)
+	log.Printf("[Receiver] Ficheiro %q transferido e validado com sucesso!", destFileName)
 	info.PrintTransferSuccess(destFileName)
 	return nil
 }

@@ -49,7 +49,7 @@ func BenchmarkTransferThroughput(b *testing.B) {
 		b.StartTimer()
 		done := make(chan error, 1)
 		go func() { done <- SendFile(f, ca, nil) }()
-		if _, err := ReceiveFile(dest, cb, size, sum, nil); err != nil {
+		if _, _, err := ReceiveFile(filepath.Dir(dest), filepath.Base(dest), cb, size, sum, nil); err != nil {
 			b.Fatal(err)
 		}
 		if err := <-done; err != nil {
