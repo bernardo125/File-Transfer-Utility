@@ -199,3 +199,36 @@ func TestHolePunchRejectsOwnToken(t *testing.T) {
 		t.Fatalf("err = %v, want ErrSameAdress", res.Err)
 	}
 }
+
+// Detects (F-07): the attempt deadline being extended by every junk datagram, so that anyone
+// who can reach the port keeps the hole punch (and the UI) hanging forever.
+func TestHolePunchTimeoutIsNotExtendedByJunkPackets(t *testing.T) {
+	a, b := newNode(t), newNode(t)
+	attacker, err := net.DialUDP("udp4", nil, a.addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { attacker.Close() })
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-time.After(20 * time.Millisecond):
+				attacker.Write([]byte("junk datagram that is not a punch"))
+			}
+		}
+	}()
+
+	start := time.Now()
+	// b never answers: the only traffic a sees is junk.
+	res := wait(t, punch(testConfig(500*time.Millisecond), a, b, b.addr(), b.addr()))
+	if res.Err == nil {
+		t.Fatal("expected a timeout")
+	}
+	if el := time.Since(start); el > 3*time.Second {
+		t.Fatalf("attempt lasted %v although the timeout is 500ms: junk packets extended it", el)
+	}
+}

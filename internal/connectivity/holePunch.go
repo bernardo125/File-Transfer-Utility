@@ -13,6 +13,11 @@ const (
 	PUNCH byte = 0x01
 )
 
+const (
+	maxConsecutiveReadErrors = 50
+	readErrorBackoff         = 20 * time.Millisecond
+)
+
 var ErrSameAdress = errors.New("That's your PC token")
 
 // based on https://medium.com/@knightkun/udp-hole-punching-from-scratch-in-golang-building-tsuna-448ca66a733b
@@ -111,8 +116,13 @@ func (punch *HolePuncher) listenPeer() {
 	defer punch.socket.SetReadDeadline(time.Time{}) // socket without time out to QUIC
 	buffer := make([]byte, 256)
 
+	// ONE absolute deadline for the whole attempt. Re-arming a fresh timeout after every datagram
+	// would let anyone who can reach the port keep the attempt alive forever with junk packets.
+	deadline := time.Now().Add(punch.config.Timeout)
+	readErrors := 0
+
 	for {
-		punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
+		punch.socket.SetReadDeadline(deadline)
 		n, addr, err := punch.socket.ReadFromUDP(buffer)
 
 		// if error type is timeout, a null address will be returned to the channel
@@ -126,6 +136,17 @@ func (punch *HolePuncher) listenPeer() {
 			punch.resultCh <- HolePunchResult{Addr: nil, Err: err}
 			return
 		}
+		// any other read error: back off, and give up if it persists instead of spinning hot
+		if err != nil {
+			readErrors++
+			if readErrors > maxConsecutiveReadErrors {
+				punch.resultCh <- HolePunchResult{Addr: nil, Err: err}
+				return
+			}
+			time.Sleep(readErrorBackoff)
+			continue
+		}
+		readErrors = 0
 		msg := buffer[:n]
 
 		//otherwise continue looping
