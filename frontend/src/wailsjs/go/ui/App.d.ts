@@ -4,6 +4,8 @@ import {ui} from '../models';
 
 export function CancelConnection():Promise<void>;
 
+export function ConfirmPeerFingerprint(arg1:boolean):Promise<void>;
+
 export function ConnectPeer(arg1:string):Promise<void>;
 
 export function CopyToClipboard(arg1:string):Promise<void>;

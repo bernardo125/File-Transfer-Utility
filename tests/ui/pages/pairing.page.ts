@@ -22,6 +22,16 @@ export class PairingPage {
   get cancelButton() {
     return this.page.getByRole('button', { name: 'Cancel' });
   }
+  /** The pairing fingerprint both users must compare before the data channel opens. */
+  get fingerprint() {
+    return this.page.getByLabel(/^Pairing fingerprint /);
+  }
+  get matchButton() {
+    return this.page.getByRole('button', { name: 'They match' });
+  }
+  get mismatchButton() {
+    return this.page.getByRole('button', { name: /^They don.t match$/ });
+  }
   get error() {
     return this.page.getByRole('alert');
   }

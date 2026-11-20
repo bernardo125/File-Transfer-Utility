@@ -6,6 +6,10 @@ export function CancelConnection() {
   return window['go']['ui']['App']['CancelConnection']();
 }
 
+export function ConfirmPeerFingerprint(arg1) {
+  return window['go']['ui']['App']['ConfirmPeerFingerprint'](arg1);
+}
+
 export function ConnectPeer(arg1) {
   return window['go']['ui']['App']['ConnectPeer'](arg1);
 }

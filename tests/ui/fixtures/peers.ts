@@ -43,7 +43,7 @@ function installBridge(methods: string[]) {
 
 // Methods of the generated binding (src/wailsjs/go/ui/App.js) the UI may call.
 const APP_METHODS = [
-  'CancelConnection', 'ConnectPeer', 'CopyToClipboard', 'Disconnect', 'GetClipboardText', 'GetDownloadDirectory',
+  'CancelConnection', 'ConfirmPeerFingerprint', 'ConnectPeer', 'CopyToClipboard', 'Disconnect', 'GetClipboardText', 'GetDownloadDirectory',
   'GetLocalToken', 'GetMyToken', 'InspectFile', 'OpenFolder', 'OpenGitHub', 'QuitApplication',
   'RespondIncomingTransfer', 'SelectDownloadDirectory', 'SelectFileNative', 'SendSelectedFile',
 ];
@@ -117,7 +117,20 @@ export async function pair(a: Peer, b: Peer, roles: { a: 'send' | 'receive'; b: 
   await a.pairing.peerTokenInput.fill(tokenB);
   await b.pairing.peerTokenInput.fill(tokenA);
   await Promise.all([a.pairing.connectButton.click(), b.pairing.connectButton.click()]);
+  await confirmFingerprints(a, b);
   await Promise.all([expect(a.transfer.connection).toContainText('Connected'), expect(b.transfer.connection).toContainText('Connected')]);
+}
+
+/**
+ * The last pairing step: both screens show a fingerprint, the users read it to each other (the test
+ * plays the voice call and requires the two to be identical) and both confirm.
+ */
+export async function confirmFingerprints(a: Peer, b: Peer) {
+  await Promise.all([expect(a.pairing.fingerprint).toBeVisible(), expect(b.pairing.fingerprint).toBeVisible()]);
+  const [fa, fb] = [(await a.pairing.fingerprint.textContent())?.trim(), (await b.pairing.fingerprint.textContent())?.trim()];
+  expect(fa).toMatch(/^([0-9A-F]{4}-){4}[0-9A-F]{4}$/);
+  expect(fa).toBe(fb);
+  await Promise.all([a.pairing.matchButton.click(), b.pairing.matchButton.click()]);
 }
 
 /** A real file of the given size with random content; returns its path and SHA-256. */

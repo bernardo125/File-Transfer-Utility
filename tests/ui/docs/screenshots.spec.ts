@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, makeFile } from '../fixtures/peers';
+import { test, expect, makeFile, confirmFingerprints } from '../fixtures/peers';
 
 const out = (name: string) => fileURLToPath(new URL(`../../../docs/media/${name}.png`, import.meta.url));
 
@@ -43,6 +43,7 @@ test('capture the happy path for the README', async ({ alice, bob, workDir }) =>
   await shotWithCursor(alice.page, alice.pairing.connectButton, out('02-pairing'));
 
   await Promise.all([alice.pairing.connectButton.click(), bob.pairing.connectButton.click()]);
+  await confirmFingerprints(alice, bob);
   await Promise.all([expect(alice.transfer.connection).toContainText('Connected'), expect(bob.transfer.connection).toContainText('Connected')]);
   await shotWithCursor(alice.page, alice.transfer.chooseFile, out('03-connected'));
 
