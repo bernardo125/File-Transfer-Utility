@@ -239,7 +239,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 			RttMs:  punchResult.Rtt.Milliseconds(),
 		})
 
-		quicConn, err := transport.QuicUpgradeContext(ctx, conn, punchResult.Addr, &privKey, peerPubKey)
+		quicConn, err := transport.QuicUpgradeCandidates(ctx, conn, punchResult.Candidates, &privKey, peerPubKey)
 		if err != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Falha no upgrade QUIC: %v", err),

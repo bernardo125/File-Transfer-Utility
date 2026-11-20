@@ -47,8 +47,53 @@ type HolePuncher struct {
 // struct that will be returned to start send chunks
 type HolePunchResult struct {
 	Addr *net.UDPAddr
-	Rtt  time.Duration
-	Err  error
+	// Candidates is the ordered list of addresses worth dialing: the address the peer's PUNCH came
+	// from first, then the token's own candidate addresses. A forged PUNCH can only ever promote a
+	// wrong address to the front; the dialer falls through to the genuine ones.
+	Candidates []*net.UDPAddr
+	Rtt        time.Duration
+	Err        error
+}
+
+// usableAddr reports whether addr is something worth probing or dialing: a unicast address with a
+// real port (token fields may be 0.0.0.0 when STUN failed, or garbage in a crafted token).
+func usableAddr(a *net.UDPAddr) bool {
+	return a != nil && a.Port != 0 && len(a.IP) > 0 && !a.IP.IsUnspecified() && !a.IP.IsMulticast()
+}
+
+// candidateAddrs returns the usable candidate addresses of the token.
+func (punch *HolePuncher) candidateAddrs() []*net.UDPAddr {
+	var out []*net.UDPAddr
+	for _, a := range []*net.UDPAddr{punch.peerLocalAddressIPV4, punch.peerRemoteAddressIPV4, punch.peerPublicAddressIPV6} {
+		if usableAddr(a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// sourceAllowed reports whether a datagram from src may be trusted as coming from the peer. The
+// PUNCH payload only carries the peer's PUBLIC key, which anyone holding the token (or watching a
+// probe) knows, so the source address is checked against the token as well: an off-path sender
+// outside the token's addresses cannot steer the connection.
+func (punch *HolePuncher) sourceAllowed(src *net.UDPAddr) bool {
+	for _, c := range punch.candidateAddrs() {
+		if c.IP.Equal(src.IP) {
+			return true
+		}
+	}
+	return false
+}
+
+// dialCandidates builds the ordered dial list for a verified first source.
+func (punch *HolePuncher) dialCandidates(first *net.UDPAddr) []*net.UDPAddr {
+	out := []*net.UDPAddr{first}
+	for _, c := range punch.candidateAddrs() {
+		if !(c.IP.Equal(first.IP) && c.Port == first.Port) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func getDefaultConfig() (config HolePunchConfig) {
@@ -107,7 +152,7 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr, myPublicKey []byte) {
 	probeMessage := make([]byte, 33)
 	probeMessage[0] = PUNCH
 	copy(probeMessage[1:33], myPublicKey)
-	if addr == nil {
+	if !usableAddr(addr) {
 		return
 	}
 	ticker := time.NewTicker(punch.config.ProbeInterval)
@@ -183,9 +228,9 @@ func (punch *HolePuncher) listenPeer() {
 		}
 		isExpectedToken := bytes.Equal(msg[1:33], punch.otherPeerPublicKey)
 
-		if isExpectedToken {
+		if isExpectedToken && punch.sourceAllowed(addr) {
 			punch.socket.SetDeadline(time.Time{}) //clean deadline
-			punch.resultCh <- HolePunchResult{Addr: addr, Err: nil}
+			punch.resultCh <- HolePunchResult{Addr: addr, Candidates: punch.dialCandidates(addr), Err: nil}
 			return
 
 		}

@@ -1,6 +1,8 @@
 package transport
 
 import (
+	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"net"
@@ -121,5 +123,63 @@ func TestDialToUnavailablePeerFailsWithinTimeout(t *testing.T) {
 	}
 	if el := time.Since(start); el > 3*time.Second {
 		t.Fatalf("dial did not honour its timeout: took %v", el)
+	}
+}
+
+// Detects (F-04): a spoofed/wrong first candidate address ending the connection attempt even
+// though the genuine address is also known.
+func TestDialerFallsBackToNextCandidate(t *testing.T) {
+	old := dialAttemptTimeout
+	dialAttemptTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { dialAttemptTimeout = old })
+
+	var d, l ident
+	for {
+		d, l = newIdent(t), newIdent(t)
+		if bytes.Compare(d.pub, l.pub) < 0 { // d dials, l listens
+			break
+		}
+	}
+	lSock, lAddr := newSock(t)
+	dSock, _ := newSock(t)
+	_, deadAddr := newSock(t) // bound, but nobody answers: models a forged first candidate
+
+	accepted := make(chan dialRes, 1)
+	go func() {
+		c, err := quicDoListen(lSock, &l.priv, &d.pub, 10*time.Second)
+		accepted <- dialRes{c, err}
+	}()
+	c, err := QuicUpgradeCandidates(context.Background(), dSock, []*net.UDPAddr{deadAddr, lAddr}, &d.priv, &l.pub)
+	if err != nil {
+		t.Fatalf("dialer did not fall back to the genuine candidate: %v", err)
+	}
+	t.Cleanup(func() { c.CloseWithError(0, "") })
+	if r := <-accepted; r.err != nil {
+		t.Fatalf("listener: %v", r.err)
+	} else {
+		t.Cleanup(func() { r.c.CloseWithError(0, "") })
+	}
+}
+
+func TestQuicUpgradeCandidatesHonoursCancellation(t *testing.T) {
+	var d, l ident
+	for {
+		d, l = newIdent(t), newIdent(t)
+		if bytes.Compare(d.pub, l.pub) < 0 {
+			break
+		}
+	}
+	dSock, _ := newSock(t)
+	_, dead1 := newSock(t)
+	_, dead2 := newSock(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if c, err := QuicUpgradeCandidates(ctx, dSock, []*net.UDPAddr{dead1, dead2}, &d.priv, &l.pub); err == nil {
+		c.CloseWithError(0, "")
+		t.Fatal("connected to nothing")
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Fatalf("cancellation ignored: %v", time.Since(start))
 	}
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 
 	"ftu/internal/connectivity"
@@ -53,7 +54,7 @@ func Run() {
 
 	info.PrintConnectingQUIC()
 	// Conecta ao endereço validado pelo Hole Punch (punchResult.Addr)
-	quicConn, err := transport.QuicUpgrade(conn, punchResult.Addr, &myPrivKey, peerPubKey)
+	quicConn, err := transport.QuicUpgradeCandidates(context.Background(), conn, punchResult.Candidates, &myPrivKey, peerPubKey)
 	if err != nil {
 		clierr.PrintConnectionError(err)
 		os.Exit(1)

@@ -267,3 +267,49 @@ func TestHolePunchStopsPromptlyWhenCancelled(t *testing.T) {
 		}
 	}
 }
+
+// Detects (F-04): a PUNCH forged from an address outside the token steering the connection. The
+// payload only contains the (public) key, so the source must be checked too.
+func TestHolePunchIgnoresForgedPunchFromUnknownSource(t *testing.T) {
+	a, b := newNode(t), newNode(t)
+	forger, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 2)})
+	if err != nil {
+		t.Skipf("cannot bind 127.0.0.2 here: %v", err)
+	}
+	t.Cleanup(func() { forger.Close() })
+
+	ch := punch(testConfig(5*time.Second), a, b, b.addr(), b.addr())
+	msg := append([]byte{PUNCH}, b.pub...)
+	for i := 0; i < 20; i++ { // forged probes arrive first and repeatedly
+		forger.WriteToUDP(msg, a.addr())
+		time.Sleep(5 * time.Millisecond)
+	}
+	select {
+	case r := <-ch:
+		t.Fatalf("verdict %+v produced by a forged PUNCH from an address that is not in the token", r)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	// The real peer shows up afterwards and must still win.
+	_ = punch(testConfig(5*time.Second), b, a, a.addr(), a.addr())
+	res := wait(t, ch)
+	if res.Err != nil || res.Addr.IP.String() != "127.0.0.1" || res.Addr.Port != b.addr().Port {
+		t.Fatalf("verdict = %+v, want the real peer %v", res, b.addr())
+	}
+	if len(res.Candidates) == 0 || res.Candidates[0].Port != b.addr().Port {
+		t.Fatalf("candidates = %v", res.Candidates)
+	}
+}
+
+// Detects (F-04/F-12): unusable candidates (port 0, 0.0.0.0, multicast) being probed or trusted.
+func TestUsableAddrRejectsSpecialAddresses(t *testing.T) {
+	bad := []*net.UDPAddr{nil, {IP: net.IPv4(1, 2, 3, 4), Port: 0}, {IP: net.IPv4zero, Port: 5}, {IP: net.IPv4(224, 0, 0, 1), Port: 5}, {Port: 5}}
+	for _, a := range bad {
+		if usableAddr(a) {
+			t.Errorf("usableAddr(%v) = true", a)
+		}
+	}
+	if !usableAddr(&net.UDPAddr{IP: net.IPv4(192, 168, 1, 2), Port: 5}) {
+		t.Error("a normal LAN address must be usable")
+	}
+}

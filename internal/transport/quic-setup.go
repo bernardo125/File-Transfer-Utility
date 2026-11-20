@@ -65,6 +65,36 @@ func QuicUpgrade(mySocket *net.UDPConn, destination *net.UDPAddr, privateKey *ed
 	return QuicUpgradeContext(context.Background(), mySocket, destination, privateKey, otherPeerPublicKey)
 }
 
+// dialAttemptTimeout bounds one dial when several candidate addresses are tried in turn.
+var dialAttemptTimeout = 6 * time.Second
+
+// QuicUpgradeCandidates is QuicUpgradeContext for several destinations. The listener role ignores
+// them (it waits for the peer); the dialer tries each in order, so a spoofed first candidate only
+// costs one attempt timeout. Authentication is unchanged: every attempt is a full mTLS handshake
+// with the pinned key, so a wrong address can never yield a session with the wrong peer.
+func QuicUpgradeCandidates(ctx context.Context, mySocket *net.UDPConn, destinations []*net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
+	myPublicKey := privateKey.Public().(ed25519.PublicKey)
+	if bytes.Compare(myPublicKey, *otherPeerPublicKey) > 0 || len(destinations) <= 1 {
+		var dest *net.UDPAddr
+		if len(destinations) > 0 {
+			dest = destinations[0]
+		}
+		return QuicUpgradeContext(ctx, mySocket, dest, privateKey, otherPeerPublicKey)
+	}
+	var lastErr error = errors.New("no candidate address")
+	for _, dest := range destinations {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		conn, err := quicDial(ctx, mySocket, dest, privateKey, otherPeerPublicKey, dialAttemptTimeout)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
 // QuicUpgradeContext is QuicUpgrade that gives up as soon as ctx is cancelled.
 func QuicUpgradeContext(ctx context.Context, mySocket *net.UDPConn, destination *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) (*quic.Conn, error) {
 
