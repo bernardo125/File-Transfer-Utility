@@ -168,6 +168,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 	privKey := a.myPrivKey
 	a.mu.Unlock()
 
+	peerToken = discovery.CleanToken(peerToken)
 	if len(peerToken) <= 12 {
 		return fmt.Errorf("invalid token length: must be longer than 12 characters")
 	}

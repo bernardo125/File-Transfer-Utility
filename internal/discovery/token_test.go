@@ -154,3 +154,50 @@ func FuzzParseXORMappedAddress(f *testing.F) {
 		}
 	})
 }
+
+// Detects (F-12): crafted tokens pointing probes at multicast/broadcast/port-0 destinations, and
+// tokens that carry "::" as a fake IPv6 candidate.
+func TestGetPeerRejectsUnusableCandidates(t *testing.T) {
+	pub := newPub(t)
+	bad := map[string][3]*net.UDPAddr{
+		"local port 0":      {udp("192.168.1.2", 0), udp("203.0.113.7", 5), nil},
+		"stun port 0":       {udp("192.168.1.2", 5), udp("203.0.113.7", 0), nil},
+		"local unspecified": {udp("0.0.0.0", 5), udp("203.0.113.7", 5), nil},
+		"local multicast":   {udp("224.0.0.1", 5), udp("203.0.113.7", 5), nil},
+		"local broadcast":   {udp("255.255.255.255", 5), udp("203.0.113.7", 5), nil},
+		"stun multicast":    {udp("192.168.1.2", 5), udp("239.1.1.1", 5), nil},
+		"ipv6 port 0":       {udp("192.168.1.2", 5), udp("203.0.113.7", 5), udp("2001:db8::1", 0)},
+		"ipv6 multicast":    {udp("192.168.1.2", 5), udp("203.0.113.7", 5), udp("ff02::1", 7)},
+	}
+	for name, c := range bad {
+		t.Run(name, func(t *testing.T) {
+			if _, _, _, _, err := GetPeer(BuildToken(c[0], c[2], c[1], pub)); err == nil {
+				t.Fatal("unusable candidate accepted")
+			}
+		})
+	}
+	// "no public mapping" marker from a failed STUN lookup stays valid
+	if _, _, _, _, err := GetPeer(BuildToken(udp("192.168.1.2", 5), nil, udp("0.0.0.0", 5), pub)); err != nil {
+		t.Fatalf("STUN-less token rejected: %v", err)
+	}
+}
+
+func TestBuildTokenDoesNotAdvertiseUnspecifiedIPv6(t *testing.T) {
+	pub := newPub(t)
+	for _, v6 := range []*net.UDPAddr{{IP: nil, Port: 5}, {IP: net.IPv6unspecified, Port: 5}} {
+		tok := BuildToken(udp("192.168.1.2", 5), v6, udp("203.0.113.7", 5), pub)
+		_, _, got, _, err := GetPeer(tok)
+		if err != nil || got != nil {
+			t.Fatalf("ipv6 = %v err = %v, want no IPv6 candidate", got, err)
+		}
+	}
+}
+
+func TestCleanTokenStripsWhitespaceAndInvisibleCharacters(t *testing.T) {
+	pub := newPub(t)
+	tok := BuildToken(udp("192.168.1.2", 5), nil, udp("203.0.113.7", 6), pub)
+	dirty := " \t" + tok[:10] + "\u200b\n" + tok[10:] + "\r\n\u00a0"
+	if got := CleanToken(dirty); got != tok {
+		t.Fatalf("CleanToken = %q, want %q", got, tok)
+	}
+}
