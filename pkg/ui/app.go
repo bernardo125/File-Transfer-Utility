@@ -112,7 +112,11 @@ func (a *App) GetMyToken() (string, error) {
 		Detail: "Resolving STUN and preparing local keys...",
 	})
 
-	conn := transport.InitializeUDPSocket()
+	conn, err := transport.ListenUDPSocket()
+	if err != nil {
+		a.emit(EventConnectionState, ConnectionStateDTO{State: "error", Detail: err.Error()})
+		return "", err
+	}
 	token, privKey := discovery.CreateKey(conn)
 
 	a.conn = conn

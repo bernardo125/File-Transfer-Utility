@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -199,5 +200,17 @@ func TestCleanTokenStripsWhitespaceAndInvisibleCharacters(t *testing.T) {
 	dirty := " \t" + tok[:10] + "\u200b\n" + tok[10:] + "\r\n\u00a0"
 	if got := CleanToken(dirty); got != tok {
 		t.Fatalf("CleanToken = %q, want %q", got, tok)
+	}
+}
+
+// Detects (F-11): a machine without a route killing the whole process (log.Fatal) from a
+// GUI-bound call.
+func TestGetLocalIPV4SurvivesMissingRoute(t *testing.T) {
+	old := dialUDP
+	dialUDP = func(string, string) (net.Conn, error) { return nil, errors.New("network is unreachable") }
+	t.Cleanup(func() { dialUDP = old })
+	ip := getLocalIPV4()
+	if ip == nil || ip.To4() == nil {
+		t.Fatalf("no usable fallback address: %v", ip)
 	}
 }
