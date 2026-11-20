@@ -1,6 +1,17 @@
 # File Throw (FTU) — Remediation Plan (Phase 1 proposal)
 
-Status of every item: **Not fixed** (Phase 1 is audit-only). To be updated in Phase 2 with `Fixed / Partially fixed / Accepted risk / Deferred / Not fixed`, commit refs, and validating tests.
+Status after Phase 2 (branch `security/hardening-2026-11-20`): Fixed F-01, F-05, F-07, F-08, F-11, F-12, F-13, F-15 · Partially fixed F-02, F-03, F-04, F-06, F-09, F-10, F-14, F-16, F-18 · Deferred F-17 and M-01…M-06. Commit refs and validating tests per finding are in `SECURITY_AUDIT.md` ("Remediation status"). The per-item text below is the original plan; the notes under "Implemented differently / deferred" record every deviation.
+
+### Implemented differently / deferred
+- **F-01:** the final file mode is 0600 (private by default); the dotfile policy strips leading dots (`.bashrc` → `bashrc`); MOTW/quarantine (M-01) not implemented (needs Windows/macOS runners).
+- **F-02:** per-offer id and serialisation done; binding the data stream to the offer is not (the authenticated peer could still open an unsolicited stream that an accepted transfer might consume; size and hash checks still apply).
+- **F-03:** option B (mandatory fingerprint) implemented as decided; option A (PAKE) not. Expiry is 24 h, checksum is truncated SHA-256, fingerprint is 80 bits in hex groups (the open decisions of the plan). v1 tokens remain accepted.
+- **F-04:** layer 1 (source-IP filter + dial fallback) implemented; layer 2 (signed challenge-response PUNCH) deferred: with both peers needing a verified address, the side that already finished punching must keep answering while QUIC starts, which needs a linger design and live-network testing.
+- **F-06:** native consent dialog, removing `GetClipboardText`, and disabling drag-and-drop were not done.
+- **F-10:** ALPN rename deferred (wire break; needs a transition release).
+- **F-17 / M-02…M-06:** deferred; they need network access, certificates, accounts, CI runners or the maintainer's approval.
+
+
 Constraints honoured by every item: direct P2P only, no relay/server, bounded-memory streaming, explicit consent, no resumption, no custom crypto, no new dependencies.
 
 | ID | Priority | Complexity | Wire/token compat impact |

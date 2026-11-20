@@ -60,8 +60,9 @@ The only external service is a **public STUN server**, used solely to learn your
 1. **Both users** open File Throw. One picks **Send**, the other **Receive**.
 2. Each side shows a **token**. Send yours to the other person through any channel, and paste theirs into the *Peer token* box.
 3. Both press **Connect**. The apps punch through their routers and open an encrypted QUIC session (a few seconds; you see each stage live).
-4. The sender picks a file. The receiver sees its **name and size** and chooses **Accept** or **Decline**.
-5. The file streams with live speed and ETA. At the end the receiver shows **verified** only if the SHA-256 matches. Several files can be sent in the same session.
+4. Both screens show the same **pairing fingerprint** (five groups of four characters). **Read it to each other** by voice or on another channel and press *They match* only if it is identical. Nothing can be sent or received until both of you have confirmed it.
+5. The sender picks a file. The receiver sees its **name and size** and chooses **Accept** or **Decline**.
+6. The file streams with live speed and ETA. At the end the receiver shows **verified** only if the SHA-256 matches. It is saved under a new name (`report (1).pdf`) if a file with that name already exists; existing files are never overwritten. Several files can be sent in the same session.
 
 ## How it works
 
@@ -82,6 +83,7 @@ sequenceDiagram
         B->>A: PUNCH (carries B's key)
     end
     A->>B: QUIC handshake, mutual TLS 1.3 (both keys pinned from the tokens)
+    Note over A,B: Both users compare the pairing fingerprint (covers both keys)<br/>and confirm. No stream is accepted before that.
     A->>B: Transfer request (name, size, SHA-256)
     B-->>A: Accept / Decline
     A->>B: File bytes on a unidirectional stream
@@ -92,9 +94,9 @@ sequenceDiagram
 | Stage | What happens | Code |
 |---|---|---|
 | **Discovery** | One UDP socket asks a STUN server for its public IPv4 address and port. If the machine has IPv6, its global address is read locally from the OS (no packet is sent). The same socket is reused for everything that follows, which is what keeps the NAT mapping alive. | [`internal/discovery`](internal/discovery) |
-| **Token** | Local address, public address (IPv4, plus IPv6 when available) and the peer's Ed25519 public key, packed into 44 to 62 bytes, encrypted with ChaCha20 and encoded as base64url. | [`signalingToken.go`](internal/discovery/signalingToken.go) |
-| **Hole punching** | Both sides send small `PUNCH` packets at all of the other's candidates in parallel (LAN, public IPv4, IPv6). The first packet carrying the expected key wins, so a same-LAN peer connects without leaving the network. | [`internal/connectivity`](internal/connectivity) |
-| **Secure channel** | QUIC over the punched socket. The roles (dialer or listener) are decided by comparing the two public keys, so no coordination is needed. Both certificates must hold exactly the key from the token. | [`internal/transport`](internal/transport) |
+| **Token** | `ftu2.` + base64url of: magic, version, flags, the peer's Ed25519 public key, local and public IPv4 (plus IPv6 when available), an expiry time (24 h) and a 4-byte checksum (56 or 74 bytes). A public identifier, not a secret. Older `v1` tokens are still accepted. | [`signalingToken.go`](internal/discovery/signalingToken.go) |
+| **Hole punching** | Both sides send small `PUNCH` packets at all of the other's candidates in parallel (LAN, public IPv4, IPv6). The first packet carrying the expected key **from one of the token's addresses** wins, so a same-LAN peer connects without leaving the network; if that address does not answer, the other addresses from the token are tried. | [`internal/connectivity`](internal/connectivity) |
+| **Secure channel** | QUIC over the punched socket. The roles (dialer or listener) are decided by comparing the two public keys, so no coordination is needed. Both certificates must hold exactly the key from the token (checked on every handshake, including resumed ones). | [`internal/transport`](internal/transport) |
 | **Protocol** | A tiny HTTP-style exchange on a control stream (`uint32` length + JSON, capped at 64 KiB, status codes such as 100/200/403/409), then the payload on its own stream. | [`internal/protocol`](internal/protocol) |
 | **Transfer** | 64 KiB chunks written to disk while hashed; size is enforced; failures remove the partial file. | [`internal/transfer`](internal/transfer) |
 
@@ -108,11 +110,15 @@ Design notes (in Portuguese) with the reasoning behind each choice are in [`docs
 |---|---|
 | Confidentiality and integrity in transit | QUIC with TLS 1.3. |
 | Peer authentication, with no CA and no server | **Mutual** TLS where each side must present the Ed25519 key that was in the token it was given. A host that only knows the peer's address cannot join the session. |
-| File integrity | SHA-256 computed while receiving, compared with the hash announced in the request. Mismatches delete the file. |
-| Hostile input | Control frames are bounded, metadata is validated (size and hash format), file names are reduced to their base name, and the token and STUN parsers return errors instead of crashing. They are fuzzed. |
-| Consent | The receiver sees name and size and must accept. A decision is only valid for an offer that is actually pending. |
+| File integrity | SHA-256 computed while receiving, compared with the hash announced in the request. The data goes to a private temporary file that only becomes the final file after size and hash are verified; a mismatch removes the temporary file and never touches a file you already had. The hash proves the bytes arrived intact, not who produced them. |
+| Hostile input | Control frames are bounded, metadata is validated (size, hash format, file name), file names are reduced to one safe component (no paths, no dotfiles, no Windows device names or stream separators, no control or bidi characters), STUN replies must answer our own request, and the token and STUN parsers return errors instead of crashing. They are fuzzed. |
+| Consent | The receiver sees name and size and must accept. A decision is bound to one specific offer (random id); a second offer is refused while one is pending, and stale or duplicate answers are rejected. |
+| Pairing | The token travels over a channel nobody authenticates, so both users must confirm the same fingerprint of both public keys before any data channel is used. The backend enforces this. |
+| Renderer trust | The UI can only send files picked in the native file dialog and can only open folders inside the download directory; the production bundle ships a Content-Security-Policy. |
 
-**What the token is, honestly:** the token is *obfuscated* with ChaCha20 under a key shipped in the binary, not secret. It is not meant to hide the peer's address, which is not sensitive. Its job is to **pin the identity** (the Ed25519 key), and the QUIC handshake enforces that. Treat a token as a per-session invitation (a new key pair is generated each time the app starts): whoever holds it can try to connect, but cannot impersonate the person it names.
+**What the token is, honestly:** a public identifier. It contains your addresses and your session's Ed25519 public key; it is not secret and its checksum only catches typos (anyone can recompute it). Its job is to **pin the identity** (the Ed25519 key), and the QUIC handshake enforces that. Because a token can be swapped by someone who controls the channel you send it through, the **fingerprint comparison is what authenticates the pairing**: if the two screens show different fingerprints, press *They don't match*. Tokens expire after 24 h; a new key pair is generated each time the app starts.
+
+Security audit, threat model and remediation status: [`docs/security`](docs/security).
 
 ## Network compatibility and limitations
 

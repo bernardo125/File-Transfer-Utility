@@ -98,3 +98,22 @@ Entry points: UDP socket (single port, all protocols multiplexed); QUIC streams 
 - Receiver file handling is not crash-safe or collision-safe (F-01).
 - Off-path UDP injection can deny pairing (F-04, F-07, F-08).
 - Dependency/vulnerability status is **unverified** (no scanners installed, network scans not authorized).
+
+## 8. Status after Phase 2
+
+Scenario outcomes (see `SECURITY_AUDIT.md` for commits and tests):
+
+| # | Scenario | Now |
+|---|----------|-----|
+| S4 | Path traversal / dotfiles / device names | **Prevented** (sanitiser + `os.Root`) |
+| S7 | Silent overwrite/destruction of an existing file | **Prevented** (no-clobber publish, temp file) |
+| S8 | Consent applied to the wrong offer | **Prevented for consent**; data stream still not bound to the offer (peer-authenticated, hash/size enforced) |
+| S9 | Token swapped in transit | **Mitigated, not prevented**: mandatory fingerprint comparison; a user who confirms without comparing is still exposed (option A/PAKE not implemented) |
+| S10 | Forged PUNCH redirects the dial | **Mitigated**: source IP must be in the token, dial falls back across candidates; a spoofer using a token IP can still cost one attempt |
+| S11 | Forged STUN reply | **Prevented** (txid/source/cookie validated) |
+| S12 | Prompt spoofing with control/bidi characters | **Prevented** (validation + `%q`) |
+| S13 | Compromised renderer | **Reduced**: no arbitrary send/open, hooks unbound, CSP; consent still decided in the renderer |
+| S14 | Peer stalls receiver | **Mitigated** (timeouts, one offer at a time); CLI control read still unbounded |
+| S15 | Resume-time bypass of pinning | **Prevented** (`VerifyConnection`) |
+
+Residual risks after Phase 2: pairing authenticity depends on the users' fingerprint comparison; no relay means some NATs cannot pair; consent UI in the renderer; no MOTW/quarantine on received files; ALPN is still the sample value; dependency vulnerability status unverified; no Windows/macOS verification; no independent penetration test.

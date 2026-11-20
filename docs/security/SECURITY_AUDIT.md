@@ -3,6 +3,8 @@
 Date: 2026-11-20 · Branch `security/hardening-2026-11-20` (from `dev` @ `b2ebd33`) · Method: manual source review, local tests, local tooling only.
 Companion documents: `THREAT_MODEL.md`, `REMEDIATION_PLAN.md`.
 
+> **Status after Phase 2:** see "Remediation status" below the severity table. Sections 1-9 are the Phase 1 baseline.
+
 ## 1. Executive summary
 
 FTU's core security design is sound where it matters most: **peer authentication is correctly enforced on both sides of the QUIC handshake** (Ed25519 key pinned from the token, `RequireAnyClientCert`, TLS 1.3 only), control frames are length-capped before allocation, payload streaming is bounded-memory, and a transfer is only reported successful after size and SHA-256 verification. No Critical findings and no remotely exploitable authentication bypass were found.
@@ -27,6 +29,51 @@ Overall: **a good foundation with a thin hardening layer around the filesystem, 
 | **Total** | **18** | |
 
 Classification: Confirmed vulnerability: F-01, F-02, F-04, F-05, F-07, F-08, F-09, F-11, F-13 · Likely: F-14 · Architectural risk: F-03, F-06 · Hardening: F-10, F-12, F-17, F-18 · Informational: F-15, F-16.
+
+## Remediation status (Phase 2, branch `security/hardening-2026-11-20`)
+
+The findings below describe the **Phase 1 baseline** (`b2ebd33`) and are kept unchanged as evidence.
+This table is the current state. "Validating tests" are the tests added or changed with the fix.
+
+| ID | Status | Commit(s) | What was done / what remains | Validating tests |
+|----|--------|-----------|------------------------------|------------------|
+| F-01 | **Fixed** | `22a24f9` | Temp file (0600, `O_EXCL`) through an `os.Root`, size+SHA-256 verified, published with `Root.Link` (never `os.Rename`), `name (1).ext` on clash, no overwrite/delete of existing files, symlinks not followed, dotfiles/`..`/device names/ADS neutralised, stale `.part` sweep. **Remaining:** Mark-of-the-Web/quarantine (M-01, deferred); Windows/macOS behaviour untested. | `receive_security_test.go` (no overwrite, failed receive keeps file, symlink, hostile names, 0600, sweep), `filename_test.go` + `FuzzSanitizeFileName` |
+| F-02 | **Partially fixed** | `8d69dbc` | Per-offer random id, `RespondIncomingTransfer(offerID, accept)`, one offer at a time (429 otherwise), stale/duplicate answers refused. **Remaining:** the data stream is not cryptographically bound to the offer (a stray uni stream from the *authenticated* peer could be taken by an accepted transfer; hash/size still apply). | `TestRespondIsBoundToTheShownOfferID`, `TestSecondOfferWhileOnePendingIsRefused`, `TestRespondWithoutPendingOfferDoesNotPreApproveNextFile` |
+| F-03 | **Partially fixed** | `982f3a5`, `a53f294`, `97e97e3`, `cde636e` | Token v2 (`ftu2.`: magic, version, flags, key, addresses, 24 h expiry, checksum), v1 still parsed (migration), checksum documented as *not* authentication, mandatory fingerprint confirmation (option B) enforced in the backend, CLI and UI. **Remaining:** PAKE (option A) not implemented; the pairing is only as strong as the users' comparison; v1 tokens remain accepted. | `tokenv2_test.go` (round trip, every corrupted byte, expiry, structure, checksum-does-not-authenticate, fingerprint), `FuzzParseToken`, `TestNothingFlowsBeforeTheFingerprintIsConfirmed`, `TestRefusingTheFingerprintClosesTheSession`, `TestExpiredTokenIsRejected`, CLI `TestAskConfirmFingerprintOnlyAcceptsExplicitYes`, Playwright refusal spec |
+| F-04 | **Partially fixed** | `4fe0768` | PUNCH accepted only from a token address (IP match), unusable addresses never probed, dialer falls back across candidates. **Deferred:** challenge-response PUNCH (needs a linger/ack design so the listener keeps answering while QUIC starts). Off-path attacker spoofing a *token* IP can still waste one dial attempt (~6 s). | `TestHolePunchIgnoresForgedPunchFromUnknownSource`, `TestDialerFallsBackToNextCandidate`, `TestUsableAddrRejectsSpecialAddresses` |
+| F-05 | **Fixed** | `0a2e9cb` | `DecodeRequest` validates names (UTF-8, ≤255 B, no Cc/Cf/Zl/Zp), CLI prompt uses `%q`, GUI shows the sanitised on-disk name. ZWJ emoji sequences are rejected (trade-off). | `TestDecodeRequestRejectsUnsafeFileNames`, `TestValidatePeerFileNameRejectsUnsafeNames`, `TestSanitizeFileName`, fuzz |
+| F-06 | **Partially fixed** | `47ebd98` | Send/inspect only for dialog-picked paths, `OpenFolder` confined, test hooks/lifecycle methods unexported (they were renderer-callable), exact bound-method list pinned by a test. **Remaining:** consent still decided in the renderer (no native dialog), `GetClipboardText` exposed by design, drag-and-drop option still enabled. | `TestOnlyFilesPickedInTheDialogCanBeInspectedOrSent`, `TestOpenFolderIsConfinedToKnownFolders`, `TestRendererCallableSurfaceIsTheReviewedList` |
+| F-07 | **Fixed** | `680800d` | One absolute deadline, back-off on persistent read errors. | `TestHolePunchTimeoutIsNotExtendedByJunkPackets` |
+| F-08 | **Fixed** | `aca8bb7` | Reply must come from the server, type 0x0101, cookie, length, txid; attribute walk; all STUN servers tried. | `stun_test.go` (header validation, forged/stray replies, timeout), `FuzzParseBindingResponse` |
+| F-09 | **Partially fixed** | `22a24f9`, `8d69dbc` | Data-stream accept timeout (30 s), per-read stall timeout (60 s), nothing created before the stream, GUI control request deadline (30 s), one offer at a time. **Remaining:** the CLI control read has no deadline (single-threaded, interactive). | `TestReceiveTimesOutWhenNoDataStreamArrives`, `TestReceiveTimesOutOnStalledSender` |
+| F-10 | **Partially fixed** | `38dc799` | Pin in `VerifyConnection` (runs on resumption), explicit TLS 1.3, bounded cert validity. **Deferred:** ALPN rename (`quic-echo-example` → product ALPN) because it is a wire break. | `TestVerifyConnectionEnforcesThePin` + existing mutual-auth tests |
+| F-11 | **Fixed** (GUI paths) | `5dd8706` | No `log.Fatal` for a missing route/socket in the GUI; `InitializeUDPSocket` kept for the CLI/tests. RNG-failure panics accepted (unrecoverable). | `TestGetLocalIPV4SurvivesMissingRoute` |
+| F-12 | **Fixed** | `2231a99` | Token candidates validated; `::` placeholder no longer advertised; pasted tokens cleaned. | `TestGetPeerRejectsUnusableCandidates`, `TestBuildTokenDoesNotAdvertiseUnspecifiedIPv6`, `TestCleanTokenStripsWhitespaceAndInvisibleCharacters` |
+| F-13 | **Fixed** | `fd846ab` | Context-aware punch/QUIC upgrade, cancel without deadline hacks, superseded attempts close their connection, new attempt waits for the old one. | `TestHolePunchStopsPromptlyWhenCancelled`, `TestCancelConnectionThenConnectForReal`, `-race` |
+| F-14 | **Partially fixed** | `22a24f9` | Fails closed on empty/malformed hash, rejects trailing bytes, free-space check (406, Unix only), distinct statuses (409 integrity / 406 space / 500 I/O). **Remaining:** no free-space pre-check on Windows (stub). | `TestReceiveRejectsAndNeverStoresMoreThanAnnouncedSize`, `TestReceiveFailsClosedWithoutValidHash`, `TestEnsureFreeSpace` |
+| F-15 | **Fixed** (documentation) | this commit | README states that SHA-256 proves intact delivery, not origin. | n/a |
+| F-16 | **Partially fixed** | `0a2e9cb` | Peer-controlled names are quoted in CLI prompt/logs. **Accepted risk:** tokens still contain private/public IPs by design; logs still contain local file names, hashes and the peer address. | n/a |
+| F-17 | **Deferred** | none | Pinning actions by SHA and pinning `govulncheck` need network resolution; Dependabot/scanners need approval (`CLAUDE.md`). | n/a |
+| F-18 | **Partially fixed** | `1378360` | Production CSP, dev mock excluded from the bundle. **Not verified** inside a real Wails webview (WebView2/WebKitGTK); verified against the built bundle in Chromium. | Playwright suite (10 tests) against the built bundle |
+
+**Counts: Fixed 8 · Partially fixed 9 · Deferred 1 · Not fixed 0** (18 findings). Market-readiness items M-01…M-06: all **Deferred** (M-06 partly covered by README); they need certificates, services, runners or approvals.
+
+### Phase 2 test results (this host: Linux, Go 1.26.4, Node 22)
+
+| Command | Result |
+|---------|--------|
+| `gofmt -l internal pkg tests cmd main.go` | no files listed |
+| `go vet ./...` | pass |
+| `GOOS=windows go vet ./internal/... ./pkg/cli/...`, `GOOS=darwin go vet …` | pass (cross-compile check only; not run) |
+| `go test -count=1 ./...` | pass (connectivity, discovery, e2e, protocol, transfer, transport, cli/input, ui) |
+| `go test -race -count=1 ./...` | pass, no data races (ui 46 s, transfer 16 s) |
+| `make fuzz FUZZTIME=8s` + `FuzzParseToken`, `FuzzSanitizeFileName`, `FuzzParseBindingResponse` (8 s each) | pass, no crashers (8 s runs are a smoke test, not a campaign) |
+| `cd frontend && npx tsc -b`, `npm test` (Vitest) | pass, 50 tests |
+| `npm run build` | pass; CSP present in `dist/index.html`; dev mock absent from the bundle |
+| `cd tests/ui && npx playwright test --project=chromium` | pass, 10 tests against the real backend and the built bundle |
+| `go mod verify` | all modules verified |
+
+**Not run / limitations:** Playwright `webkit` project; `netem`; `govulncheck`/`gosec`/`npm audit` (not installed / need network) — dependency vulnerability status is still **unverified**; Windows and macOS execution; a real Wails webview (CSP, native dialogs); live-network STUN/NAT scenarios.
 
 ## 2. Scope and method
 
