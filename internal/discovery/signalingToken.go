@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 	"unicode"
 
 	"golang.org/x/crypto/chacha20"
@@ -51,10 +52,17 @@ func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
 	return BuildToken(local_ipv4, public_ipv6, stun_response, public), priv
 }
 
-// BuildToken serializes the connection candidates into the shareable (obfuscated) token.
+// BuildToken serializes the connection candidates into the shareable v2 token (a public,
+// checksummed identifier, see tokenv2.go).
 // It performs no network I/O, which makes the token format testable without STUN.
 // ipv6 may be nil; local and stun must be IPv4 addresses.
 func BuildToken(local, ipv6, stun *net.UDPAddr, public ed25519.PublicKey) string {
+	return buildTokenV2(local, ipv6, stun, public, time.Now().Add(TokenValidity))
+}
+
+// buildTokenV1 produces the legacy token (obfuscated with a constant key, no checksum, no
+// expiry). It is only kept so the legacy parser stays testable.
+func buildTokenV1(local, ipv6, stun *net.UDPAddr, public ed25519.PublicKey) string {
 	if ipv6 != nil && (len(ipv6.IP) == 0 || ipv6.IP.IsUnspecified()) {
 		ipv6 = nil // no IPv6 connectivity: do not advertise "::"
 	}
@@ -73,6 +81,15 @@ func ed55519TokenGen() (public ed25519.PublicKey, priv ed25519.PrivateKey) {
 }
 
 func GetPeer(key string) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
+	t, err := ParseToken(key, time.Now())
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return t.Local, t.Stun, t.IPv6, &t.PublicKey, nil
+}
+
+// parseTokenV1 decodes the legacy token format.
+func parseTokenV1(key string) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
 	if len(key) < 50 {
 		return nil, nil, nil, nil, fmt.Errorf("That's not a token")
 	}
