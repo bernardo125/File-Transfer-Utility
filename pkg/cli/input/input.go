@@ -52,6 +52,18 @@ func AskPeerToken(reader *bufio.Reader) (string, error) {
 	}
 }
 
+// AskConfirmFingerprint shows the pairing fingerprint and returns true only for an explicit "Y".
+// Anything else (including EOF-less empty input) counts as a refusal: the safe default is "no".
+func AskConfirmFingerprint(reader *bufio.Reader, fingerprint string) (bool, error) {
+	fmt.Printf("\nPAIRING FINGERPRINT: %s\n", fingerprint)
+	fmt.Print("Compare it with your peer by voice or another channel.\nIs it IDENTICAL on both screens? (Y/N): ")
+	ans, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(strings.ToUpper(ans)) == "Y", nil
+}
+
 // AskFilePath prompts the user for the file path to send.
 func AskFilePath(reader *bufio.Reader) (string, error) {
 	fmt.Print("\nType the path of the file you want to send (or 'exit' to close): ")

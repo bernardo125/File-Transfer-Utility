@@ -141,3 +141,16 @@ func TestAskMenuOptionReturnsErrorWhenInputEnds(t *testing.T) {
 		}
 	}
 }
+
+// Detects (F-03): the pairing being confirmed by anything other than an explicit yes.
+func TestAskConfirmFingerprintOnlyAcceptsExplicitYes(t *testing.T) {
+	for in, want := range map[string]bool{"y\n": true, "Y\n": true, " yes\n": false, "\n": false, "n\n": false, "N\n": false, "maybe\n": false, "1\n": false} {
+		got, err := within(t, func() (bool, error) { return AskConfirmFingerprint(rd(in), "AAAA-BBBB-CCCC-DDDD-EEEE") })
+		if err != nil || got != want {
+			t.Errorf("input %q: got %v, %v want %v", in, got, err, want)
+		}
+	}
+	if got, err := within(t, func() (bool, error) { return AskConfirmFingerprint(rd(""), "x") }); err == nil || got {
+		t.Errorf("closed input must be an error and a refusal, got %v %v", got, err)
+	}
+}
