@@ -1,6 +1,7 @@
 package connectivity
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
@@ -230,5 +231,39 @@ func TestHolePunchTimeoutIsNotExtendedByJunkPackets(t *testing.T) {
 	}
 	if el := time.Since(start); el > 3*time.Second {
 		t.Fatalf("attempt lasted %v although the timeout is 500ms: junk packets extended it", el)
+	}
+}
+
+// Detects (F-13): a cancelled attempt lingering (reading the shared socket and probing for up to
+// the full timeout), which made the next connection attempt compete for packets.
+func TestHolePunchStopsPromptlyWhenCancelled(t *testing.T) {
+	a, b := newNode(t), newNode(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := udpHolePunchCtx(ctx, testConfig(30*time.Second), a.conn, b.addr(), b.addr(), nil, &a.priv, &b.pub)
+
+	time.AfterFunc(100*time.Millisecond, cancel)
+	start := time.Now()
+	res := wait(t, ch)
+	if !errors.Is(res.Err, context.Canceled) {
+		t.Fatalf("verdict error = %v, want context.Canceled", res.Err)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatalf("cancel took %v", time.Since(start))
+	}
+
+	// No reader may be left on the socket: a packet sent now must be readable by the test.
+	if _, err := b.conn.WriteToUDP([]byte("after-cancel"), a.addr()); err != nil {
+		t.Fatal(err)
+	}
+	a.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 64)
+	for {
+		n, _, err := a.conn.ReadFromUDP(buf)
+		if err != nil {
+			t.Fatalf("packet was swallowed by a lingering reader: %v", err)
+		}
+		if string(buf[:n]) == "after-cancel" {
+			break
+		}
 	}
 }

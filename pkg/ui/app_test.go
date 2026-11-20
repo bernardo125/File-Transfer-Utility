@@ -507,3 +507,30 @@ func TestSecondOfferWhileOnePendingIsRefused(t *testing.T) {
 		t.Fatalf("received %v, want only one.bin", got)
 	}
 }
+
+// Detects (F-13): a cancelled connection attempt leaving the socket in a state where the next
+// attempt cannot succeed (lost cancel, two readers on the shared socket).
+func TestCancelThenReconnectStillConnects(t *testing.T) {
+	a, b := newPeer(t), newPeer(t)
+	ta, tb := a.token(t), b.token(t)
+	if err := a.app.ConnectPeer(tb); err != nil {
+		t.Fatal(err)
+	}
+	a.rec.waitFor(t, "A hole punching", func(e ev) bool {
+		d, ok := e.data.(ConnectionStateDTO)
+		return e.name == EventConnectionState && ok && d.State == "hole_punching"
+	})
+	if err := a.app.CancelConnection(); err != nil {
+		t.Fatal(err)
+	}
+	a.rec.waitFor(t, "cancel reported", named(EventConnectionFailed))
+
+	if err := a.app.ConnectPeer(tb); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.app.ConnectPeer(ta); err != nil {
+		t.Fatal(err)
+	}
+	a.rec.waitFor(t, "A connected after cancel", named(EventConnectionSuccess))
+	b.rec.waitFor(t, "B connected after cancel", named(EventConnectionSuccess))
+}

@@ -39,6 +39,7 @@ type App struct {
 	offer         *pendingOffer // the single offer waiting for the user's decision (guarded by mu)
 	receiving     bool          // true while an accepted offer is being received (guarded by mu)
 	cancelConnect context.CancelFunc
+	connectDone   chan struct{} // closed when the latest connect goroutine has fully finished
 	connectMu     sync.Mutex
 	emitter       func(event string, data ...any) // nil in production: events go through the Wails runtime
 }
@@ -140,14 +141,6 @@ func (a *App) CancelConnection() error {
 	}
 	a.connectMu.Unlock()
 
-	a.mu.Lock()
-	if a.conn != nil {
-		_ = a.conn.SetReadDeadline(time.Now())
-		time.Sleep(20 * time.Millisecond)
-		_ = a.conn.SetReadDeadline(time.Time{})
-	}
-	a.mu.Unlock()
-
 	a.emit(EventConnectionFailed, ConnectionFailedDTO{
 		Reason: "Ligação cancelada pelo utilizador",
 	})
@@ -185,6 +178,9 @@ func (a *App) ConnectPeer(peerToken string) error {
 		a.cancelConnect()
 	}
 	a.cancelConnect = cancel
+	prevDone := a.connectDone // the superseded attempt (cancelled above) must finish first
+	done := make(chan struct{})
+	a.connectDone = done
 	a.connectMu.Unlock()
 
 	a.emit(EventConnectionState, ConnectionStateDTO{
@@ -193,6 +189,10 @@ func (a *App) ConnectPeer(peerToken string) error {
 	})
 
 	go func() {
+		defer close(done)
+		if prevDone != nil {
+			<-prevDone
+		}
 		peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, peerPubKey, err := discovery.GetPeer(peerToken)
 		if err != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
@@ -209,16 +209,17 @@ func (a *App) ConnectPeer(peerToken string) error {
 		a.peerPubKey = peerPubKey
 		a.mu.Unlock()
 
-		punchCh := connectivity.UDPHolePunch(conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, &privKey, peerPubKey)
+		punchCh := connectivity.UDPHolePunchContext(ctx, conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, &privKey, peerPubKey)
 
 		var punchResult connectivity.HolePunchResult
-		select {
-		case <-ctx.Done():
+		// The punch stops by itself when ctx is cancelled; waiting for its verdict guarantees the
+		// socket has no reader left before a new attempt can start.
+		punchResult = <-punchCh
+		if ctx.Err() != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: "Ligação cancelada pelo utilizador",
 			})
 			return
-		case punchResult = <-punchCh:
 		}
 
 		if punchResult.Err != nil {
@@ -238,7 +239,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 			RttMs:  punchResult.Rtt.Milliseconds(),
 		})
 
-		quicConn, err := transport.QuicUpgrade(conn, punchResult.Addr, &privKey, peerPubKey)
+		quicConn, err := transport.QuicUpgradeContext(ctx, conn, punchResult.Addr, &privKey, peerPubKey)
 		if err != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Falha no upgrade QUIC: %v", err),
@@ -250,7 +251,16 @@ func (a *App) ConnectPeer(peerToken string) error {
 			return
 		}
 
+		// A newer ConnectPeer/CancelConnection/Disconnect may have superseded this attempt.
 		a.mu.Lock()
+		if ctx.Err() != nil {
+			a.mu.Unlock()
+			_ = quicConn.CloseWithError(0, "connection attempt superseded")
+			return
+		}
+		if a.quicConn != nil {
+			_ = a.quicConn.CloseWithError(0, "replaced by a new connection")
+		}
 		a.quicConn = quicConn
 		a.mu.Unlock()
 
@@ -273,6 +283,13 @@ func (a *App) ConnectPeer(peerToken string) error {
 
 // Disconnect cleanly shuts down the active connection and socket.
 func (a *App) Disconnect() error {
+	a.connectMu.Lock()
+	if a.cancelConnect != nil {
+		a.cancelConnect()
+		a.cancelConnect = nil
+	}
+	a.connectMu.Unlock()
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 

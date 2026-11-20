@@ -2,6 +2,7 @@ package connectivity
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"net"
@@ -40,6 +41,7 @@ type HolePuncher struct {
 	otherPeerPublicKey    []byte
 	resultCh              chan HolePunchResult
 	done                  chan struct{} // closed when the punch finished; stops all probes
+	ctx                   context.Context
 }
 
 // struct that will be returned to start send chunks
@@ -54,15 +56,26 @@ func getDefaultConfig() (config HolePunchConfig) {
 }
 
 func UDPHolePunch(conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
-	return udpHolePunch(getDefaultConfig(), conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
+	return udpHolePunchCtx(context.Background(), getDefaultConfig(), conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
+}
+
+// UDPHolePunchContext is UDPHolePunch that stops promptly when ctx is cancelled: the verdict
+// channel then receives ctx.Err(), the probes stop and the socket is released for the next user
+// (no read deadline tricks from the outside are needed).
+func UDPHolePunchContext(ctx context.Context, conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
+	return udpHolePunchCtx(ctx, getDefaultConfig(), conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
 }
 
 // udpHolePunch is UDPHolePunch with an injectable configuration (lets tests use short timeouts).
 func udpHolePunch(defaultConfig HolePunchConfig, conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
+	return udpHolePunchCtx(context.Background(), defaultConfig, conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
+}
+
+func udpHolePunchCtx(ctx context.Context, defaultConfig HolePunchConfig, conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
 		peerLocalAddressIPV4: peerLocalIPV4, peerRemoteAddressIPV4: peerRemoteIPV4, peerPublicAddressIPV6: peerPublicIPV6,
-		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult, 1), done: make(chan struct{})}
+		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult, 1), done: make(chan struct{}), ctx: ctx}
 
 	// test if is the same address
 	if isMyOwnPC(&punch.myPublicKey, &punch.otherPeerPublicKey) {
@@ -118,12 +131,27 @@ func (punch *HolePuncher) listenPeer() {
 
 	// ONE absolute deadline for the whole attempt. Re-arming a fresh timeout after every datagram
 	// would let anyone who can reach the port keep the attempt alive forever with junk packets.
-	deadline := time.Now().Add(punch.config.Timeout)
+	// It is set once (not per read) so that a cancellation, which forces the deadline to "now",
+	// cannot be overwritten by the loop.
+	punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
 	readErrors := 0
 
+	// Cancellation: unblock the pending read; the verdict below reports ctx.Err().
+	go func() {
+		select {
+		case <-punch.ctx.Done():
+			punch.socket.SetReadDeadline(time.Now())
+		case <-punch.done:
+		}
+	}()
+
 	for {
-		punch.socket.SetReadDeadline(deadline)
 		n, addr, err := punch.socket.ReadFromUDP(buffer)
+
+		if punch.ctx.Err() != nil {
+			punch.resultCh <- HolePunchResult{Addr: nil, Err: punch.ctx.Err()}
+			return
+		}
 
 		// if error type is timeout, a null address will be returned to the channel
 		if err != nil && os.IsTimeout(err) {
