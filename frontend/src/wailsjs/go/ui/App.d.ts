@@ -26,7 +26,7 @@ export function OpenGitHub():Promise<void>;
 
 export function QuitApplication():Promise<void>;
 
-export function RespondIncomingTransfer(arg1:boolean):Promise<void>;
+export function RespondIncomingTransfer(arg1:string,arg2:boolean):Promise<void>;
 
 export function SelectDownloadDirectory():Promise<string>;
 

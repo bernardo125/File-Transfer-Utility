@@ -45,6 +45,8 @@ export interface FileMetadata {
 }
 
 export interface IncomingTransfer {
+  /** Identifier the backend expects back with the user's decision. */
+  offerId: string;
   fileName: string;
   fileSize: number;
   fileHash: string;

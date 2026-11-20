@@ -3,6 +3,9 @@ package ui
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -25,22 +28,37 @@ import (
 
 // App is the central Wails application struct handling IPC bindings and state.
 type App struct {
-	ctx                context.Context
-	mu                 sync.Mutex
-	conn               *net.UDPConn
-	myToken            string
-	myPrivKey          ed25519.PrivateKey
-	peerPubKey         *ed25519.PublicKey
-	quicConn           *quic.Conn
-	downloadDir        string
-	incomingDecisionCh chan bool
-	offerPending       bool // true only while an offer waits for the user's decision (guarded by mu)
-	cancelConnect      context.CancelFunc
-	connectMu          sync.Mutex
-	emitter            func(event string, data ...any) // nil in production: events go through the Wails runtime
+	ctx           context.Context
+	mu            sync.Mutex
+	conn          *net.UDPConn
+	myToken       string
+	myPrivKey     ed25519.PrivateKey
+	peerPubKey    *ed25519.PublicKey
+	quicConn      *quic.Conn
+	downloadDir   string
+	offer         *pendingOffer // the single offer waiting for the user's decision (guarded by mu)
+	receiving     bool          // true while an accepted offer is being received (guarded by mu)
+	cancelConnect context.CancelFunc
+	connectMu     sync.Mutex
+	emitter       func(event string, data ...any) // nil in production: events go through the Wails runtime
 }
 
 // NewApp creates a new App instance.
+// pendingOffer is one incoming transfer request waiting for the user.
+type pendingOffer struct {
+	id       string
+	decision chan bool // cap 1; written at most once
+	decided  bool      // guarded by App.mu
+}
+
+func newOfferID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
 func NewApp() *App {
 	downloadDir := ""
 	if usr, err := user.Current(); err == nil {
@@ -55,8 +73,7 @@ func NewApp() *App {
 	}
 
 	return &App{
-		downloadDir:        downloadDir,
-		incomingDecisionCh: make(chan bool, 1),
+		downloadDir: downloadDir,
 	}
 }
 
@@ -426,22 +443,20 @@ func (a *App) SendSelectedFile(filePath string) error {
 	return nil
 }
 
-// RespondIncomingTransfer signals the receiver loop whether to accept or reject an incoming file.
-func (a *App) RespondIncomingTransfer(accept bool) error {
+// RespondIncomingTransfer records the user's decision for ONE specific offer. offerID is the
+// identifier the backend put in the transfer:incoming event: a decision for any other (stale,
+// unknown or already answered) offer is refused, so a late or duplicated click can never approve a
+// file the user did not see.
+func (a *App) RespondIncomingTransfer(offerID string, accept bool) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// A decision is only valid for an offer the user has actually been shown. Without this check an
-	// early "accept" would stay in the channel and silently approve the next file that arrives.
-	if !a.offerPending {
-		return fmt.Errorf("no pending incoming transfer to respond to")
+	o := a.offer
+	if o == nil || o.decided || subtle.ConstantTimeCompare([]byte(o.id), []byte(offerID)) != 1 {
+		return fmt.Errorf("no pending incoming transfer with that id")
 	}
-	select {
-	case a.incomingDecisionCh <- accept:
-		a.offerPending = false
-		return nil
-	default:
-		return fmt.Errorf("no pending incoming transfer to respond to")
-	}
+	o.decided = true
+	o.decision <- accept // buffered (cap 1) and written once, never blocks
+	return nil
 }
 
 // OpenFolder opens the containing folder of a file or a directory in the native file manager.

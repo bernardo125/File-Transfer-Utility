@@ -25,6 +25,7 @@ const (
 	StatusBadRequest    StatusCode = 400 // Metadata error
 	StatusForbidden     StatusCode = 403 // Rejected by other peer
 	StatusNotAcceptable StatusCode = 406 // Rejected by the SO (ex: no space)
+	StatusBusy          StatusCode = 429 // another offer is pending or being received
 	StatusConflict      StatusCode = 409 // file integrity failure (Hash)
 	StatusClientClosed  StatusCode = 499 // cancelled by sender
 	StatusInternalError StatusCode = 500 // I/O failure

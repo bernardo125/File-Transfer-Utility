@@ -152,6 +152,19 @@ func (p *peer) received(t *testing.T) []string {
 	return out
 }
 
+// answer responds to the most recent offer shown to this peer, like a user clicking the dialog.
+func (p *peer) answer(t *testing.T, accept bool) error {
+	t.Helper()
+	evs := p.rec.all()
+	for i := len(evs) - 1; i >= 0; i-- {
+		if evs[i].name == EventTransferIncoming {
+			return p.app.RespondIncomingTransfer(evs[i].data.(IncomingTransferDTO).OfferID, accept)
+		}
+	}
+	t.Fatal("no incoming offer to answer")
+	return nil
+}
+
 // send starts SendSelectedFile in the background and returns its result channel.
 func (p *peer) send(path string) <-chan error {
 	ch := make(chan error, 1)
@@ -181,7 +194,7 @@ func TestTransferEndToEndEventsAndBytes(t *testing.T) {
 	if offer.FileName != "report.bin" || offer.FileSize != 3<<20+11 || offer.FileHash != sum {
 		t.Fatalf("offer shown to the receiving user is wrong: %+v (want report.bin, %d, %s)", offer, 3<<20+11, sum)
 	}
-	if err := b.app.RespondIncomingTransfer(true); err != nil {
+	if err := b.app.RespondIncomingTransfer(offer.OfferID, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := result(t, sent, "SendSelectedFile"); err != nil {
@@ -229,7 +242,7 @@ func TestTransferEndToEndEventsAndBytes(t *testing.T) {
 // silently accept the NEXT file someone sends.
 func TestRespondWithoutPendingOfferDoesNotPreApproveNextFile(t *testing.T) {
 	a, b := pair(t)
-	if err := b.app.RespondIncomingTransfer(true); err == nil {
+	if err := b.app.RespondIncomingTransfer("00000000000000000000000000000000", true); err == nil {
 		// The call was accepted: prove the consequence, so the failure explains itself.
 		src, _ := testutil.WriteFile(t, t.TempDir(), "surprise.bin", 50_000, 3)
 		sent := a.send(src)
@@ -346,7 +359,7 @@ func TestSenderDiesMidTransfer(t *testing.T) {
 
 	a.send(src)
 	b.rec.waitFor(t, "incoming", named(EventTransferIncoming))
-	if err := b.app.RespondIncomingTransfer(true); err != nil {
+	if err := b.answer(t, true); err != nil {
 		t.Fatal(err)
 	}
 	b.rec.waitFor(t, "data flowing", func(e ev) bool {
@@ -376,7 +389,7 @@ func TestReceiverDiesMidTransfer(t *testing.T) {
 
 	sent := a.send(src)
 	b.rec.waitFor(t, "incoming", named(EventTransferIncoming))
-	if err := b.app.RespondIncomingTransfer(true); err != nil {
+	if err := b.answer(t, true); err != nil {
 		t.Fatal(err)
 	}
 	b.rec.waitFor(t, "data flowing", func(e ev) bool {
@@ -422,7 +435,7 @@ func TestDeclinedTransferWritesNothingAndSenderIsTold(t *testing.T) {
 
 	sent := a.send(src)
 	b.rec.waitFor(t, "incoming", named(EventTransferIncoming))
-	if err := b.app.RespondIncomingTransfer(false); err != nil {
+	if err := b.answer(t, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := result(t, sent, "SendSelectedFile"); err == nil || !strings.Contains(err.Error(), "rejected by peer") {
@@ -432,5 +445,65 @@ func TestDeclinedTransferWritesNothingAndSenderIsTold(t *testing.T) {
 	b.rec.waitFor(t, "receiver rejected status", status("rejected"))
 	if got := b.received(t); len(got) != 0 {
 		t.Fatalf("declined transfer left files: %v", got)
+	}
+}
+
+// Detects (F-02): a decision for a different/unknown/already answered offer being applied.
+func TestRespondIsBoundToTheShownOfferID(t *testing.T) {
+	a, b := pair(t)
+	src, _ := testutil.WriteFile(t, t.TempDir(), "one.bin", 50_000, 8)
+	sent := a.send(src)
+	offer := b.rec.waitFor(t, "offer", named(EventTransferIncoming)).data.(IncomingTransferDTO)
+	if offer.OfferID == "" {
+		t.Fatal("offer carries no id")
+	}
+	if err := b.app.RespondIncomingTransfer("not-the-id", true); err == nil {
+		t.Fatal("decision with a wrong offer id was accepted")
+	}
+	if err := b.app.RespondIncomingTransfer(offer.OfferID, true); err != nil {
+		t.Fatalf("correct id refused: %v", err)
+	}
+	if err := b.app.RespondIncomingTransfer(offer.OfferID, true); err == nil {
+		t.Fatal("a second decision for the same offer was accepted")
+	}
+	if err := result(t, sent, "SendSelectedFile"); err != nil {
+		t.Fatalf("sender: %v", err)
+	}
+	if err := b.app.RespondIncomingTransfer(offer.OfferID, true); err == nil {
+		t.Fatal("a stale decision after completion was accepted")
+	}
+}
+
+// Detects (F-02): a second offer sharing (and racing for) the decision of the first one.
+func TestSecondOfferWhileOnePendingIsRefused(t *testing.T) {
+	a, b := pair(t)
+	srcs := t.TempDir()
+	one, _ := testutil.WriteFile(t, srcs, "one.bin", 50_000, 9)
+	two, _ := testutil.WriteFile(t, srcs, "two.bin", 50_000, 10)
+
+	first := a.send(one)
+	offer := b.rec.waitFor(t, "first offer", named(EventTransferIncoming)).data.(IncomingTransferDTO)
+
+	err := result(t, a.send(two), "second SendSelectedFile")
+	if err == nil || !strings.Contains(err.Error(), "429") {
+		t.Fatalf("second offer should be refused with 429, got %v", err)
+	}
+	count := 0
+	for _, e := range b.rec.all() {
+		if e.name == EventTransferIncoming {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("user was shown %d offers, want exactly 1", count)
+	}
+	if err := b.app.RespondIncomingTransfer(offer.OfferID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := result(t, first, "first SendSelectedFile"); err != nil {
+		t.Fatalf("first transfer: %v", err)
+	}
+	if got := b.received(t); len(got) != 1 || got[0] != "one.bin" {
+		t.Fatalf("received %v, want only one.bin", got)
 	}
 }

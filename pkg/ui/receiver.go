@@ -11,6 +11,13 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+const (
+	// controlRequestTimeout bounds how long a peer may take to send its metadata request.
+	controlRequestTimeout = 30 * time.Second
+	// offerDecisionTimeout is how long the user has to answer an offer.
+	offerDecisionTimeout = 120 * time.Second
+)
+
 func (a *App) startReceiverLoop() {
 	for {
 		a.mu.Lock()
@@ -34,37 +41,64 @@ func (a *App) startReceiverLoop() {
 func (a *App) handleIncomingStream(controlStream *quic.Stream, conn *quic.Conn) {
 	defer controlStream.Close()
 
+	// A peer must send its request promptly; an idle control stream must not hold a goroutine.
+	_ = controlStream.SetReadDeadline(time.Now().Add(controlRequestTimeout))
 	req, err := protocol.ReceiveMetaDataRequest(controlStream)
+	_ = controlStream.SetReadDeadline(time.Time{})
+	if err != nil {
+		_ = protocol.SendCodeResponse(protocol.StatusBadRequest, controlStream)
+		return
+	}
+	// The name shown to the user is the name that will really be used on disk.
+	safeName, err := transfer.SanitizeFileName(req.FileName)
 	if err != nil {
 		_ = protocol.SendCodeResponse(protocol.StatusBadRequest, controlStream)
 		return
 	}
 
-	// Open the decision window before the UI is told, so a fast answer cannot arrive too early,
-	// and drop any decision left over from an earlier offer.
-	a.mu.Lock()
-	select {
-	case <-a.incomingDecisionCh:
-	default:
+	// One offer at a time: while a decision is pending or an accepted file is being received,
+	// further offers are refused instead of sharing (and racing for) one decision.
+	id, err := newOfferID()
+	if err != nil {
+		_ = protocol.SendCodeResponse(protocol.StatusInternalError, controlStream)
+		return
 	}
-	a.offerPending = true
+	offer := &pendingOffer{id: id, decision: make(chan bool, 1)}
+	a.mu.Lock()
+	if a.offer != nil || a.receiving {
+		a.mu.Unlock()
+		_ = protocol.SendCodeResponse(protocol.StatusBusy, controlStream)
+		return
+	}
+	a.offer = offer
 	a.mu.Unlock()
 
 	a.emit(EventTransferIncoming, IncomingTransferDTO{
-		FileName: req.FileName,
+		OfferID:  offer.id,
+		FileName: safeName,
 		FileSize: req.FileSize,
 		FileHash: req.FileHash,
 	})
 
 	var accepted bool
 	select {
-	case accepted = <-a.incomingDecisionCh:
-	case <-time.After(120 * time.Second):
-		accepted = false
+	case accepted = <-offer.decision:
+	case <-time.After(offerDecisionTimeout):
+	case <-conn.Context().Done():
 	}
 	a.mu.Lock()
-	a.offerPending = false
+	a.offer = nil
+	if accepted {
+		a.receiving = true
+	}
 	a.mu.Unlock()
+	if accepted {
+		defer func() {
+			a.mu.Lock()
+			a.receiving = false
+			a.mu.Unlock()
+		}()
+	}
 
 	if !accepted {
 		_ = protocol.SendCodeResponse(protocol.StatusForbidden, controlStream)

@@ -257,8 +257,8 @@ export function initWailsMock(): void {
         }, 1500);
         return undefined;
       },
-      RespondIncomingTransfer: async (accept: unknown) => {
-        console.info('[Wails Mock] RespondIncomingTransfer:', accept);
+      RespondIncomingTransfer: async (offerId: unknown, accept: unknown) => {
+        console.info('[Wails Mock] RespondIncomingTransfer:', offerId, accept);
         if (accept) {
           w.runtime?.EventsEmit?.('transfer:status', 'transferring');
           let currentPct = 0;
@@ -302,6 +302,7 @@ export function initWailsMock(): void {
     // Auto-trigger an incoming proposal for receiver in browser mock after connection
     setTimeout(() => {
       w.runtime?.EventsEmit?.('transfer:incoming', {
+        offerId: 'mock-offer-0001',
         fileName: 'document_sample.zip',
         fileSize: 14857600,
         fileHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',

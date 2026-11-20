@@ -50,8 +50,8 @@ export function QuitApplication() {
   return window['go']['ui']['App']['QuitApplication']();
 }
 
-export function RespondIncomingTransfer(arg1) {
-  return window['go']['ui']['App']['RespondIncomingTransfer'](arg1);
+export function RespondIncomingTransfer(arg1, arg2) {
+  return window['go']['ui']['App']['RespondIncomingTransfer'](arg1, arg2);
 }
 
 export function SelectDownloadDirectory() {

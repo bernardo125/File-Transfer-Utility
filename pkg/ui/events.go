@@ -34,6 +34,7 @@ type FileInfoDTO struct {
 }
 
 type IncomingTransferDTO struct {
+	OfferID  string `json:"offerId"` // must be echoed back to RespondIncomingTransfer
 	FileName string `json:"fileName"`
 	FileSize int64  `json:"fileSize"`
 	FileHash string `json:"fileHash"`
