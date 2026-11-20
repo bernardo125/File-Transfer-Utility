@@ -5,6 +5,9 @@ import (
 	"ftu/internal/discovery"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -109,9 +112,9 @@ type peer struct {
 func newPeer(t *testing.T) *peer {
 	t.Helper()
 	p := &peer{app: NewApp(), rec: newRecorder(), dir: t.TempDir()}
-	p.app.SetEventEmitter(p.rec.emit)
-	p.app.SetDownloadDirectory(p.dir)
-	t.Cleanup(func() { p.app.Shutdown(context.Background()) })
+	p.app.setEventEmitter(p.rec.emit)
+	p.app.setDownloadDirectory(p.dir)
+	t.Cleanup(func() { p.app.shutdown(context.Background()) })
 	return p
 }
 
@@ -191,9 +194,16 @@ func (p *peer) answer(t *testing.T, accept bool) error {
 	return nil
 }
 
+// sendNow is SendSelectedFile after the user "picked" the file in the native dialog.
+func (p *peer) sendNow(path string) error {
+	p.app.allowSendPath(path)
+	return p.app.SendSelectedFile(path)
+}
+
 // send starts SendSelectedFile in the background and returns its result channel.
 func (p *peer) send(path string) <-chan error {
 	ch := make(chan error, 1)
+	p.app.allowSendPath(path) // what the native file dialog does
 	go func() { ch <- p.app.SendSelectedFile(path) }()
 	return ch
 }
@@ -287,13 +297,13 @@ func TestRespondWithoutPendingOfferDoesNotPreApproveNextFile(t *testing.T) {
 func TestSendWithoutConnectionOrWithBadFileFailsCleanly(t *testing.T) {
 	solo := newPeer(t)
 	src, _ := testutil.WriteFile(t, t.TempDir(), "x.bin", 10, 4)
-	if err := solo.app.SendSelectedFile(src); err == nil || !strings.Contains(err.Error(), "no active peer connection") {
+	if err := solo.sendNow(src); err == nil || !strings.Contains(err.Error(), "no active peer connection") {
 		t.Fatalf("send without a peer: %v", err)
 	}
 
 	a, _ := pair(t)
 	for name, path := range map[string]string{"missing file": filepath.Join(t.TempDir(), "nope"), "directory": t.TempDir()} {
-		if err := a.app.SendSelectedFile(path); err == nil {
+		if err := a.sendNow(path); err == nil {
 			t.Fatalf("%s: accepted", name)
 		}
 	}
@@ -381,7 +391,7 @@ func TestDisconnectIsReportedToThePeerAndSessionEnds(t *testing.T) {
 		return ok && d.State == "error" && d.Detail == "Peer disconnected"
 	})
 	src, _ := testutil.WriteFile(t, t.TempDir(), "x.bin", 10, 5)
-	if err := a.app.SendSelectedFile(src); err == nil {
+	if err := a.sendNow(src); err == nil {
 		t.Fatal("sending after Disconnect must fail")
 	}
 }
@@ -400,7 +410,7 @@ func TestSenderDiesMidTransfer(t *testing.T) {
 		p, ok := e.data.(TransferProgressDTO)
 		return ok && p.BytesTransferred > 0 && p.Percentage < 100
 	})
-	a.app.Shutdown(context.Background())
+	a.app.shutdown(context.Background())
 
 	errEv := b.rec.waitFor(t, "receive error", named(EventTransferError)).data.(TransferErrorDTO)
 	if errEv.Code != "RECEIVE_FAILED" || errEv.Message == "" {
@@ -430,7 +440,7 @@ func TestReceiverDiesMidTransfer(t *testing.T) {
 		p, ok := e.data.(TransferProgressDTO)
 		return ok && p.BytesTransferred > 0
 	})
-	b.app.Shutdown(context.Background())
+	b.app.shutdown(context.Background())
 
 	if err := result(t, sent, "SendSelectedFile"); err == nil {
 		t.Fatal("sender reported success although the receiver died")
@@ -549,7 +559,7 @@ func TestNothingFlowsBeforeTheFingerprintIsConfirmed(t *testing.T) {
 		t.Fatalf("fingerprints differ: %q %q", fpA, fpB)
 	}
 	src, _ := testutil.WriteFile(t, t.TempDir(), "early.bin", 1000, 11)
-	if err := a.app.SendSelectedFile(src); err == nil || !strings.Contains(err.Error(), "not been confirmed") {
+	if err := a.sendNow(src); err == nil || !strings.Contains(err.Error(), "not been confirmed") {
 		t.Fatalf("send before confirmation = %v, want a 'not confirmed' error", err)
 	}
 	for _, p := range []*peer{a, b} {
@@ -563,7 +573,7 @@ func TestNothingFlowsBeforeTheFingerprintIsConfirmed(t *testing.T) {
 	if err := a.app.ConfirmPeerFingerprint(true); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.app.SendSelectedFile(src); err == nil {
+	if err := b.sendNow(src); err == nil {
 		t.Fatal("B sent although B's user never confirmed")
 	}
 	if got := b.received(t); len(got) != 0 {
@@ -582,7 +592,7 @@ func TestRefusingTheFingerprintClosesTheSession(t *testing.T) {
 		t.Fatalf("reason = %q", failed.Reason)
 	}
 	src, _ := testutil.WriteFile(t, t.TempDir(), "x.bin", 100, 12)
-	if err := a.app.SendSelectedFile(src); err == nil {
+	if err := a.sendNow(src); err == nil {
 		t.Fatal("send worked after the pairing was refused")
 	}
 	if err := a.app.ConfirmPeerFingerprint(true); err == nil {
@@ -613,5 +623,99 @@ func TestExpiredTokenIsRejected(t *testing.T) {
 	f := a.rec.waitFor(t, "failure", named(EventConnectionFailed)).data.(ConnectionFailedDTO)
 	if !strings.Contains(f.Reason, "expired") {
 		t.Fatalf("reason = %q, want it to mention the expiry", f.Reason)
+	}
+}
+
+// Detects (F-06): the renderer naming an arbitrary path (e.g. an SSH key) to send or inspect.
+func TestOnlyFilesPickedInTheDialogCanBeInspectedOrSent(t *testing.T) {
+	a, b := pair(t)
+	dir := t.TempDir()
+	secret, _ := testutil.WriteFile(t, dir, "id_ed25519", 500, 20)
+	picked, _ := testutil.WriteFile(t, dir, "picked.bin", 500, 21)
+
+	if _, err := a.app.InspectFile(secret); err == nil {
+		t.Fatal("InspectFile accepted a path nobody picked")
+	}
+	if err := a.app.SendSelectedFile(secret); err == nil {
+		t.Fatal("SendSelectedFile accepted a path nobody picked")
+	}
+	if got := b.rec.all(); countEvents(got, EventTransferIncoming) != 0 {
+		t.Fatal("an offer for an unpicked file reached the peer")
+	}
+	a.app.allowSendPath(picked)
+	// the allowed path may be spelled differently but is the same file
+	if _, err := a.app.InspectFile(filepath.Join(dir, ".", "sub", "..", "picked.bin")); err != nil {
+		t.Fatalf("picked file refused: %v", err)
+	}
+	if _, err := a.app.InspectFile("picked.bin"); err == nil {
+		t.Fatal("a relative path must not match an absolute selection")
+	}
+}
+
+func countEvents(evs []ev, name string) int {
+	n := 0
+	for _, e := range evs {
+		if e.name == name {
+			n++
+		}
+	}
+	return n
+}
+
+// Detects (F-06): OpenFolder used to launch URLs, URI handlers or unrelated directories.
+func TestOpenFolderIsConfinedToKnownFolders(t *testing.T) {
+	p := newPeer(t) // download dir = p.dir
+	inside := filepath.Join(p.dir, "sub")
+	if err := os.Mkdir(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(inside, "a.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	pickedDir := t.TempDir()
+	picked, _ := testutil.WriteFile(t, pickedDir, "p.bin", 10, 30)
+	p.app.allowSendPath(picked)
+
+	for _, ok := range []string{p.dir, inside, file, picked, pickedDir} {
+		if _, err := p.app.openableFolder(ok); err != nil {
+			t.Errorf("openableFolder(%q) refused: %v", ok, err)
+		}
+	}
+	bad := []string{"", "https://evil.example/x", "ms-msdt:/id PCWDiagnostic", "file:///etc/passwd", "relative/dir", "-h", "/", "/etc",
+		outside, filepath.Join(p.dir, "missing"), filepath.Join(p.dir, "..")}
+	for _, path := range bad {
+		if got, err := p.app.openableFolder(path); err == nil {
+			t.Errorf("openableFolder(%q) = %q, want refusal", path, got)
+		}
+	}
+	if runtime.GOOS != "windows" {
+		link := filepath.Join(p.dir, "escape")
+		if err := os.Symlink(outside, link); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := p.app.openableFolder(link); err == nil {
+			t.Errorf("a symlink out of the download folder was followed: %q", got)
+		}
+	}
+}
+
+// Detects (F-06): methods added to *App silently becoming callable from the renderer. Wails binds
+// EVERY exported method; test hooks, lifecycle callbacks and setters must stay unexported.
+func TestRendererCallableSurfaceIsTheReviewedList(t *testing.T) {
+	want := []string{"CancelConnection", "ConfirmPeerFingerprint", "ConnectPeer", "CopyToClipboard", "Disconnect",
+		"GetClipboardText", "GetDownloadDirectory", "GetLocalToken", "GetMyToken", "InspectFile", "OpenFolder",
+		"OpenGitHub", "QuitApplication", "RespondIncomingTransfer", "SelectDownloadDirectory", "SelectFileNative",
+		"SendSelectedFile"}
+	typ := reflect.TypeOf(&App{})
+	var got []string
+	for i := 0; i < typ.NumMethod(); i++ {
+		got = append(got, typ.Method(i).Name)
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("renderer-callable methods changed:\n got  %v\n want %v\nreview each new method for what a hostile renderer could do with it", got, want)
 	}
 }

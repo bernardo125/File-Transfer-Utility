@@ -13,6 +13,7 @@ import (
 	"os/user"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,13 +43,16 @@ type App struct {
 	confirmed       bool
 	pendingAddr     string
 	pendingRttMs    int64
-	downloadDir     string
-	offer           *pendingOffer // the single offer waiting for the user's decision (guarded by mu)
-	receiving       bool          // true while an accepted offer is being received (guarded by mu)
-	cancelConnect   context.CancelFunc
-	connectDone     chan struct{} // closed when the latest connect goroutine has fully finished
-	connectMu       sync.Mutex
-	emitter         func(event string, data ...any) // nil in production: events go through the Wails runtime
+	// sendable holds the files the user picked in the native dialog. The renderer is not trusted
+	// to name arbitrary paths: InspectFile/SendSelectedFile/OpenFolder only act on these.
+	sendable      []string
+	downloadDir   string
+	offer         *pendingOffer // the single offer waiting for the user's decision (guarded by mu)
+	receiving     bool          // true while an accepted offer is being received (guarded by mu)
+	cancelConnect context.CancelFunc
+	connectDone   chan struct{} // closed when the latest connect goroutine has fully finished
+	connectMu     sync.Mutex
+	emitter       func(event string, data ...any) // nil in production: events go through the Wails runtime
 }
 
 // NewApp creates a new App instance.
@@ -85,13 +89,14 @@ func NewApp() *App {
 	}
 }
 
-// Startup is invoked by Wails when the runtime is ready.
-func (a *App) Startup(ctx context.Context) {
+// startup is invoked by Wails when the runtime is ready. It is unexported on purpose: Wails binds
+// every exported method of the bound struct, i.e. makes it callable from the renderer.
+func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// Shutdown is invoked by Wails when the application is closing.
-func (a *App) Shutdown(ctx context.Context) {
+// shutdown is invoked by Wails when the application is closing (unexported, see startup).
+func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -392,11 +397,60 @@ func (a *App) SelectFileNative() (*FileInfoDTO, error) {
 		return nil, err
 	}
 
+	a.allowSendPath(filePath)
 	return a.InspectFile(filePath)
 }
 
-// InspectFile inspects a file path and calculates its SHA256 checksum and metadata.
+const maxSendablePaths = 64
+
+// canonicalPath returns an absolute, cleaned path ("" if it cannot be made absolute).
+func canonicalPath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return ""
+	}
+	return filepath.Clean(abs)
+}
+
+// allowSendPath remembers a path the user selected through a native dialog.
+func (a *App) allowSendPath(p string) {
+	c := canonicalPath(p)
+	if c == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, existing := range a.sendable {
+		if existing == c {
+			return
+		}
+	}
+	if len(a.sendable) >= maxSendablePaths {
+		a.sendable = a.sendable[1:]
+	}
+	a.sendable = append(a.sendable, c)
+}
+
+func (a *App) isSendable(p string) bool {
+	c := canonicalPath(p)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, existing := range a.sendable {
+		if c != "" && existing == c {
+			return true
+		}
+	}
+	return false
+}
+
+var errPathNotSelected = fmt.Errorf("that file was not selected through the file dialog")
+
+// InspectFile inspects a file the user picked in the native dialog and calculates its SHA256
+// checksum and metadata. Any other path is refused.
 func (a *App) InspectFile(filePath string) (*FileInfoDTO, error) {
+	if !a.isSendable(filePath) {
+		return nil, errPathNotSelected
+	}
 	file, stats, hash, err := transfer.SelectFileToSend(filePath)
 	if err != nil {
 		return nil, err
@@ -436,6 +490,9 @@ func (a *App) GetDownloadDirectory() string {
 
 // SendSelectedFile sends the selected file to the connected peer over QUIC.
 func (a *App) SendSelectedFile(filePath string) error {
+	if !a.isSendable(filePath) {
+		return errPathNotSelected
+	}
 	a.mu.Lock()
 	conn := a.quicConn
 	confirmed := a.confirmed
@@ -553,22 +610,59 @@ func (a *App) RespondIncomingTransfer(offerID string, accept bool) error {
 	return nil
 }
 
-// OpenFolder opens the containing folder of a file or a directory in the native file manager.
+// OpenFolder opens, in the native file manager, the folder of a file the app itself produced or
+// consumed: something inside the download directory, or next to a file the user selected to send.
+// Anything else (URLs, URI schemes, relative or non-existent paths, other directories) is refused,
+// so a compromised renderer cannot use it to launch arbitrary handlers.
 func (a *App) OpenFolder(path string) error {
-	info, err := os.Stat(path)
-	targetDir := path
-	if err == nil && !info.IsDir() {
-		targetDir = filepath.Dir(path)
+	target, err := a.openableFolder(path)
+	if err != nil {
+		return err
 	}
-
 	switch goruntime.GOOS {
 	case "windows":
-		return exec.Command("explorer", targetDir).Start()
+		return exec.Command("explorer", target).Start()
 	case "darwin":
-		return exec.Command("open", targetDir).Start()
+		return exec.Command("open", target).Start()
 	default:
-		return exec.Command("xdg-open", targetDir).Start()
+		return exec.Command("xdg-open", target).Start()
 	}
+}
+
+// openableFolder validates path and returns the absolute, symlink-resolved directory to open.
+func (a *App) openableFolder(path string) (string, error) {
+	if path == "" || !filepath.IsAbs(path) {
+		return "", fmt.Errorf("refusing to open %q: not an absolute local path", path)
+	}
+	resolved, err := filepath.EvalSymlinks(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("refusing to open %q: %w", path, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	dir := resolved
+	if !info.IsDir() {
+		dir = filepath.Dir(resolved)
+	}
+
+	a.mu.Lock()
+	roots := []string{a.downloadDir}
+	for _, p := range a.sendable {
+		roots = append(roots, filepath.Dir(p))
+	}
+	a.mu.Unlock()
+	for _, root := range roots {
+		r, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			continue
+		}
+		if rel, err := filepath.Rel(r, dir); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("refusing to open %q: outside the download folder and the selected files", path)
 }
 
 // CopyToClipboard copies text to the native clipboard.
