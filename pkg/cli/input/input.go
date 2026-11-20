@@ -83,7 +83,7 @@ func AskSendAnother(reader *bufio.Reader) (bool, error) {
 
 // AskAcceptTransfer prompts the receiver whether to accept or reject an incoming file transfer.
 func AskAcceptTransfer(reader *bufio.Reader, fileName string, fileSize int64) (bool, error) {
-	fmt.Printf("\n[?] Peer wants to send '%s' (%.2f MB). Accept? (Y/N): ",
+	fmt.Printf("\n[?] Peer wants to send %q (%.2f MB). Accept? (Y/N): ",
 		fileName, float64(fileSize)/(1024*1024))
 
 	ans, err := reader.ReadString('\n')

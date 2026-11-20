@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 
+	"ftu/internal/transfer"
+
 	"github.com/quic-go/quic-go"
 )
 
@@ -69,11 +71,14 @@ func ReceiveMetaDataRequest(controlStream *quic.Stream) (*Request, error) {
 }
 
 // DecodeRequest parses and validates a metadata request payload. A request that decodes
-// but carries a negative size or a malformed hash is rejected, because the receiver uses
+// but carries an unsafe file name, a negative size or a malformed hash is rejected, because the receiver uses
 // those fields to decide whether size and integrity checks are enforced.
 func DecodeRequest(payload []byte) (*Request, error) {
 	var request Request
 	if err := json.Unmarshal(payload, &request); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
+	}
+	if err := transfer.ValidatePeerFileName(request.FileName); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 	}
 	if request.FileSize < 0 {
