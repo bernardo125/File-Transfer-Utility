@@ -5,6 +5,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"math/big"
 	"net"
 	"testing"
 	"time"
@@ -183,3 +186,54 @@ func TestQuicUpgradeCandidatesHonoursCancellation(t *testing.T) {
 		t.Fatalf("cancellation ignored: %v", time.Since(start))
 	}
 }
+
+func certWithKey(t *testing.T, id ident) *x509.Certificate {
+	t.Helper()
+	der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{SerialNumber: bigOne()}, &x509.Certificate{SerialNumber: bigOne()}, id.pub, id.priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+// Detects (F-10): the pin being skipped. VerifyConnection is the hook Go runs on every handshake
+// including resumed ones; the decision must hold for any ConnectionState it is given.
+func TestVerifyConnectionEnforcesThePin(t *testing.T) {
+	me, peer, other := newIdent(t), newIdent(t), newIdent(t)
+	cfg := generateTLSConfig(&me.priv, &peer.pub)
+	if cfg.VerifyConnection == nil {
+		t.Fatal("no VerifyConnection hook installed")
+	}
+	good := tls.ConnectionState{Version: tls.VersionTLS13, PeerCertificates: []*x509.Certificate{certWithKey(t, peer)}}
+	if err := cfg.VerifyConnection(good); err != nil {
+		t.Fatalf("pinned peer rejected: %v", err)
+	}
+	resumed := good
+	resumed.DidResume = true
+	if err := cfg.VerifyConnection(resumed); err != nil {
+		t.Fatalf("resumed pinned peer rejected: %v", err)
+	}
+	cases := map[string]tls.ConnectionState{
+		"other key":    {Version: tls.VersionTLS13, PeerCertificates: []*x509.Certificate{certWithKey(t, other)}},
+		"no cert":      {Version: tls.VersionTLS13},
+		"tls 1.2":      {Version: tls.VersionTLS12, PeerCertificates: good.PeerCertificates},
+		"resumed, bad": {Version: tls.VersionTLS13, DidResume: true, PeerCertificates: []*x509.Certificate{certWithKey(t, other)}},
+	}
+	for name, cs := range cases {
+		if err := cfg.VerifyConnection(cs); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if cfg.ClientAuth != tls.RequireAnyClientCert {
+		t.Error("mutual authentication must stay required")
+	}
+	if cfg.MinVersion != 0 && cfg.MinVersion < tls.VersionTLS13 {
+		t.Errorf("MinVersion = %x", cfg.MinVersion)
+	}
+}
+
+func bigOne() *big.Int { return big.NewInt(1) }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -19,7 +20,10 @@ import (
 
 // Based on https://github.com/quic-go/quic-go/blob/master/example/echo/echo.go
 func generateTLSConfig(priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) *tls.Config {
-	template := x509.Certificate{SerialNumber: big.NewInt(1)}
+	// The certificate only carries the identity key; peers pin the key, not the certificate, so
+	// the validity window is informational. It is kept short and bounded anyway.
+	now := time.Now()
+	template := x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: now.Add(-time.Hour), NotAfter: now.Add(7 * 24 * time.Hour)}
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, priv.Public(), priv)
 	if err != nil {
 		panic(err)
@@ -30,31 +34,37 @@ func generateTLSConfig(priv *ed25519.PrivateKey, otherPeerPublicKey *ed25519.Pub
 			Certificate: [][]byte{certDER},
 			PrivateKey:  priv,
 		}},
-		NextProtos:         []string{"quic-echo-example"},
-		InsecureSkipVerify: true, // hostname check disabled; chain verified below
+		MinVersion:         tls.VersionTLS13,
+		NextProtos:         []string{"quic-echo-example"}, // ALPN rename is a wire change, tracked separately
+		InsecureSkipVerify: true,                          // hostname check disabled; chain verified below
 		// Without this the listening side never asks the dialer for a certificate, so
 		// VerifyPeerCertificate would only ever run on the dialer and any host able to
 		// reach the UDP port could open a session. Mutual authentication is required.
 		ClientAuth: tls.RequireAnyClientCert,
-		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-			if len(rawCerts) == 0 {
-				return errors.New("peer sent no certificate")
-			}
-			cert, err := x509.ParseCertificate(rawCerts[0])
-			if err != nil {
-				return fmt.Errorf("parse peer cert: %w", err)
-			}
-			// Verify received public key with token's public key
-			receivedPublicKey, ok := cert.PublicKey.(ed25519.PublicKey)
-			if !ok {
-				return fmt.Errorf("invalid public key type: expected ed25519, got %T", cert.PublicKey)
-			}
-			if !bytes.Equal(receivedPublicKey, *otherPeerPublicKey) {
-				return fmt.Errorf("denied access: not the same key")
-			}
-			return nil
-		},
+		// VerifyConnection (unlike VerifyPeerCertificate) also runs when a session is resumed, so
+		// the key pin can never be skipped by a resumption path.
+		VerifyConnection: func(cs tls.ConnectionState) error { return verifyPinnedPeer(cs, *otherPeerPublicKey) },
 	}
+}
+
+// verifyPinnedPeer is the authentication decision of the product: the peer must be speaking
+// TLS 1.3 and its certificate must carry exactly the Ed25519 key that came in the token. TLS 1.3's
+// CertificateVerify has already proven that the peer holds the matching private key.
+func verifyPinnedPeer(cs tls.ConnectionState, pinned ed25519.PublicKey) error {
+	if cs.Version != tls.VersionTLS13 {
+		return fmt.Errorf("denied access: TLS version 0x%04x is not TLS 1.3", cs.Version)
+	}
+	if len(cs.PeerCertificates) == 0 {
+		return errors.New("peer sent no certificate")
+	}
+	got, ok := cs.PeerCertificates[0].PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return fmt.Errorf("invalid public key type: expected ed25519, got %T", cs.PeerCertificates[0].PublicKey)
+	}
+	if subtle.ConstantTimeCompare(got, pinned) != 1 {
+		return errors.New("denied access: not the same key")
+	}
+	return nil
 }
 
 // handshakeTimeout bounds how long either side waits for the QUIC handshake.
