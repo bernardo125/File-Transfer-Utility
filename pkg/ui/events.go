@@ -12,9 +12,10 @@ const (
 )
 
 type ConnectionStateDTO struct {
-	State  string `json:"state"` // "idle" | "discovery" | "ready" | "hole_punching" | "upgrading" | "connected" | "error"
-	Detail string `json:"detail"`
-	RttMs  int64  `json:"rttMs"`
+	State       string `json:"state"` // "idle" | "discovery" | "ready" | "hole_punching" | "upgrading" | "awaiting_confirmation" | "connected" | "error"
+	Detail      string `json:"detail"`
+	RttMs       int64  `json:"rttMs"`
+	Fingerprint string `json:"fingerprint,omitempty"` // only with "awaiting_confirmation"
 }
 
 type ConnectionSuccessDTO struct {

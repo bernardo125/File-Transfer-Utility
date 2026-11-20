@@ -21,10 +21,10 @@ const (
 func (a *App) startReceiverLoop() {
 	for {
 		a.mu.Lock()
-		conn := a.quicConn
+		conn, confirmed := a.quicConn, a.confirmed
 		a.mu.Unlock()
 
-		if conn == nil {
+		if conn == nil || !confirmed { // the data channel only exists after pairing confirmation
 			return
 		}
 

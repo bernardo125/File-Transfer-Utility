@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"ftu/internal/discovery"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,8 +124,14 @@ func (p *peer) token(t *testing.T) string {
 	return tok
 }
 
-// pair connects two fresh Apps the way two users would: exchange tokens, both press Connect.
-func pair(t *testing.T) (a, b *peer) {
+func awaiting(e ev) bool {
+	d, ok := e.data.(ConnectionStateDTO)
+	return e.name == EventConnectionState && ok && d.State == "awaiting_confirmation"
+}
+
+// connectUnconfirmed does what two users do up to (and including) seeing the fingerprint, but
+// does NOT confirm it. It returns the fingerprints shown to a and b.
+func connectUnconfirmed(t *testing.T) (a, b *peer, fpA, fpB string) {
 	t.Helper()
 	a, b = newPeer(t), newPeer(t)
 	ta, tb := a.token(t), b.token(t)
@@ -132,6 +139,25 @@ func pair(t *testing.T) (a, b *peer) {
 		t.Fatal(err)
 	}
 	if err := b.app.ConnectPeer(ta); err != nil {
+		t.Fatal(err)
+	}
+	fpA = a.rec.waitFor(t, "A awaiting confirmation", awaiting).data.(ConnectionStateDTO).Fingerprint
+	fpB = b.rec.waitFor(t, "B awaiting confirmation", awaiting).data.(ConnectionStateDTO).Fingerprint
+	return a, b, fpA, fpB
+}
+
+// pair connects two fresh Apps the way two users would: exchange tokens, both press Connect,
+// compare the fingerprint and both confirm it.
+func pair(t *testing.T) (a, b *peer) {
+	t.Helper()
+	a, b, fpA, fpB := connectUnconfirmed(t)
+	if fpA == "" || fpA != fpB {
+		t.Fatalf("users would see different fingerprints: %q vs %q", fpA, fpB)
+	}
+	if err := a.app.ConfirmPeerFingerprint(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.app.ConfirmPeerFingerprint(true); err != nil {
 		t.Fatal(err)
 	}
 	a.rec.waitFor(t, "A connected", named(EventConnectionSuccess))
@@ -330,6 +356,14 @@ func TestCancelConnectionThenConnectForReal(t *testing.T) {
 	if err := b.app.ConnectPeer(ta); err != nil {
 		t.Fatal(err)
 	}
+	a.rec.waitFor(t, "A awaiting confirmation after cancel", awaiting)
+	b.rec.waitFor(t, "B awaiting confirmation", awaiting)
+	if err := a.app.ConfirmPeerFingerprint(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.app.ConfirmPeerFingerprint(true); err != nil {
+		t.Fatal(err)
+	}
 	a.rec.waitFor(t, "A connected after cancel", named(EventConnectionSuccess))
 	b.rec.waitFor(t, "B connected", named(EventConnectionSuccess))
 }
@@ -508,29 +542,76 @@ func TestSecondOfferWhileOnePendingIsRefused(t *testing.T) {
 	}
 }
 
-// Detects (F-13): a cancelled connection attempt leaving the socket in a state where the next
-// attempt cannot succeed (lost cancel, two readers on the shared socket).
-func TestCancelThenReconnectStillConnects(t *testing.T) {
-	a, b := newPeer(t), newPeer(t)
-	ta, tb := a.token(t), b.token(t)
-	if err := a.app.ConnectPeer(tb); err != nil {
+// Detects (F-03): the data channel opening before the users confirmed the fingerprint.
+func TestNothingFlowsBeforeTheFingerprintIsConfirmed(t *testing.T) {
+	a, b, fpA, fpB := connectUnconfirmed(t)
+	if fpA != fpB || fpA == "" {
+		t.Fatalf("fingerprints differ: %q %q", fpA, fpB)
+	}
+	src, _ := testutil.WriteFile(t, t.TempDir(), "early.bin", 1000, 11)
+	if err := a.app.SendSelectedFile(src); err == nil || !strings.Contains(err.Error(), "not been confirmed") {
+		t.Fatalf("send before confirmation = %v, want a 'not confirmed' error", err)
+	}
+	for _, p := range []*peer{a, b} {
+		for _, e := range p.rec.all() {
+			if e.name == EventConnectionSuccess {
+				t.Fatal("connection reported as successful before confirmation")
+			}
+		}
+	}
+	// Only A confirms: B still refuses to send, and B's side has no receiver loop yet.
+	if err := a.app.ConfirmPeerFingerprint(true); err != nil {
 		t.Fatal(err)
 	}
-	a.rec.waitFor(t, "A hole punching", func(e ev) bool {
-		d, ok := e.data.(ConnectionStateDTO)
-		return e.name == EventConnectionState && ok && d.State == "hole_punching"
-	})
-	if err := a.app.CancelConnection(); err != nil {
-		t.Fatal(err)
+	if err := b.app.SendSelectedFile(src); err == nil {
+		t.Fatal("B sent although B's user never confirmed")
 	}
-	a.rec.waitFor(t, "cancel reported", named(EventConnectionFailed))
+	if got := b.received(t); len(got) != 0 {
+		t.Fatalf("files appeared on B: %v", got)
+	}
+}
 
-	if err := a.app.ConnectPeer(tb); err != nil {
+// Detects (F-03): a mismatch not tearing the session down, or leaving a usable channel behind.
+func TestRefusingTheFingerprintClosesTheSession(t *testing.T) {
+	a, b, _, _ := connectUnconfirmed(t)
+	if err := a.app.ConfirmPeerFingerprint(false); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.app.ConnectPeer(ta); err != nil {
+	failed := a.rec.waitFor(t, "failure reported", named(EventConnectionFailed)).data.(ConnectionFailedDTO)
+	if !strings.Contains(failed.Reason, "did not match") {
+		t.Fatalf("reason = %q", failed.Reason)
+	}
+	src, _ := testutil.WriteFile(t, t.TempDir(), "x.bin", 100, 12)
+	if err := a.app.SendSelectedFile(src); err == nil {
+		t.Fatal("send worked after the pairing was refused")
+	}
+	if err := a.app.ConfirmPeerFingerprint(true); err == nil {
+		t.Fatal("a refused pairing could be confirmed afterwards")
+	}
+	// The other side learns the peer is gone.
+	b.rec.waitFor(t, "B told about the lost peer", named(EventConnectionFailed))
+}
+
+func TestConfirmWithoutPendingPairingFails(t *testing.T) {
+	p := newPeer(t)
+	if err := p.app.ConfirmPeerFingerprint(true); err == nil {
+		t.Fatal("confirming nothing succeeded")
+	}
+}
+
+// Detects (F-03): an expired token being used to start a connection.
+func TestExpiredTokenIsRejected(t *testing.T) {
+	a, b := newPeer(t), newPeer(t)
+	old := discovery.TokenValidity
+	discovery.TokenValidity = -time.Minute
+	expired := b.token(t)
+	discovery.TokenValidity = old
+	_ = a.token(t)
+	if err := a.app.ConnectPeer(expired); err != nil {
 		t.Fatal(err)
 	}
-	a.rec.waitFor(t, "A connected after cancel", named(EventConnectionSuccess))
-	b.rec.waitFor(t, "B connected after cancel", named(EventConnectionSuccess))
+	f := a.rec.waitFor(t, "failure", named(EventConnectionFailed)).data.(ConnectionFailedDTO)
+	if !strings.Contains(f.Reason, "expired") {
+		t.Fatalf("reason = %q, want it to mention the expiry", f.Reason)
+	}
 }

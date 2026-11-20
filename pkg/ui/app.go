@@ -28,20 +28,27 @@ import (
 
 // App is the central Wails application struct handling IPC bindings and state.
 type App struct {
-	ctx           context.Context
-	mu            sync.Mutex
-	conn          *net.UDPConn
-	myToken       string
-	myPrivKey     ed25519.PrivateKey
-	peerPubKey    *ed25519.PublicKey
-	quicConn      *quic.Conn
-	downloadDir   string
-	offer         *pendingOffer // the single offer waiting for the user's decision (guarded by mu)
-	receiving     bool          // true while an accepted offer is being received (guarded by mu)
-	cancelConnect context.CancelFunc
-	connectDone   chan struct{} // closed when the latest connect goroutine has fully finished
-	connectMu     sync.Mutex
-	emitter       func(event string, data ...any) // nil in production: events go through the Wails runtime
+	ctx        context.Context
+	mu         sync.Mutex
+	conn       *net.UDPConn
+	myToken    string
+	myPrivKey  ed25519.PrivateKey
+	peerPubKey *ed25519.PublicKey
+	quicConn   *quic.Conn
+	// Pairing gate (F-03): the QUIC session exists after the handshake, but no stream is accepted
+	// and no file can be sent until BOTH users have compared the fingerprint and this side's user
+	// confirmed it. Guarded by mu.
+	awaitingConfirm bool
+	confirmed       bool
+	pendingAddr     string
+	pendingRttMs    int64
+	downloadDir     string
+	offer           *pendingOffer // the single offer waiting for the user's decision (guarded by mu)
+	receiving       bool          // true while an accepted offer is being received (guarded by mu)
+	cancelConnect   context.CancelFunc
+	connectDone     chan struct{} // closed when the latest connect goroutine has fully finished
+	connectMu       sync.Mutex
+	emitter         func(event string, data ...any) // nil in production: events go through the Wails runtime
 }
 
 // NewApp creates a new App instance.
@@ -88,6 +95,7 @@ func (a *App) Shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	a.awaitingConfirm, a.confirmed = false, false
 	if a.quicConn != nil {
 		_ = a.quicConn.CloseWithError(0, "Application shutdown")
 		a.quicConn = nil
@@ -183,6 +191,9 @@ func (a *App) ConnectPeer(peerToken string) error {
 		a.cancelConnect()
 	}
 	a.cancelConnect = cancel
+	a.mu.Lock()
+	a.awaitingConfirm, a.confirmed = false, false
+	a.mu.Unlock()
 	prevDone := a.connectDone // the superseded attempt (cancelled above) must finish first
 	done := make(chan struct{})
 	a.connectDone = done
@@ -198,7 +209,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 		if prevDone != nil {
 			<-prevDone
 		}
-		peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, peerPubKey, err := discovery.GetPeer(peerToken)
+		tok, err := discovery.ParseToken(peerToken, time.Now())
 		if err != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Token inválido: %v", err),
@@ -210,6 +221,8 @@ func (a *App) ConnectPeer(peerToken string) error {
 			return
 		}
 
+		peerPubKey := &tok.PublicKey
+		peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6 := tok.Local, tok.Stun, tok.IPv6
 		a.mu.Lock()
 		a.peerPubKey = peerPubKey
 		a.mu.Unlock()
@@ -269,20 +282,74 @@ func (a *App) ConnectPeer(peerToken string) error {
 		a.quicConn = quicConn
 		a.mu.Unlock()
 
-		a.emit(EventConnectionSuccess, ConnectionSuccessDTO{
-			Addr:  punchResult.Addr.String(),
-			RttMs: punchResult.Rtt.Milliseconds(),
-		})
+		// The session is up but NOT trusted yet: both users must compare this fingerprint (it covers
+		// both identity keys) and confirm. Until then no stream is accepted and nothing is sent.
+		fingerprint := discovery.PairingFingerprint(privKey.Public().(ed25519.PublicKey), *peerPubKey)
+		a.mu.Lock()
+		a.awaitingConfirm = true
+		a.confirmed = false
+		a.pendingAddr = quicConn.RemoteAddr().String()
+		a.pendingRttMs = punchResult.Rtt.Milliseconds()
+		a.mu.Unlock()
 
+		detail := "Compare the fingerprint with your peer (by voice or another channel) and confirm only if it is identical."
+		if tok.Version < 2 {
+			detail += " Your peer uses an older app version (legacy token): the comparison is the only protection."
+		}
 		a.emit(EventConnectionState, ConnectionStateDTO{
-			State:  "connected",
-			Detail: fmt.Sprintf("Conectado a %s", punchResult.Addr.String()),
-			RttMs:  punchResult.Rtt.Milliseconds(),
+			State:       "awaiting_confirmation",
+			Detail:      detail,
+			RttMs:       punchResult.Rtt.Milliseconds(),
+			Fingerprint: fingerprint,
 		})
 
-		go a.startReceiverLoop()
+		// If the peer vanishes while the user is still comparing, say so.
+		go func() {
+			<-quicConn.Context().Done()
+			a.mu.Lock()
+			waiting := a.awaitingConfirm && a.quicConn == quicConn
+			if waiting {
+				a.awaitingConfirm = false
+				a.quicConn = nil
+			}
+			a.mu.Unlock()
+			if waiting {
+				a.emit(EventConnectionFailed, ConnectionFailedDTO{Reason: "The peer disconnected before the pairing was confirmed"})
+				a.emit(EventConnectionState, ConnectionStateDTO{State: "error", Detail: "Peer disconnected"})
+			}
+		}()
 	}()
 
+	return nil
+}
+
+// ConfirmPeerFingerprint records the user's verdict on the pairing fingerprint. Only a "match"
+// opens the data channel (events, receiving and sending); a mismatch tears the session down. The
+// backend enforces this: the renderer cannot skip the step, because SendSelectedFile and the
+// stream acceptor both check the state set here.
+func (a *App) ConfirmPeerFingerprint(match bool) error {
+	a.mu.Lock()
+	if !a.awaitingConfirm || a.quicConn == nil {
+		a.mu.Unlock()
+		return fmt.Errorf("no pairing is waiting for confirmation")
+	}
+	a.awaitingConfirm = false
+	if !match {
+		conn := a.quicConn
+		a.quicConn = nil
+		a.mu.Unlock()
+		_ = conn.CloseWithError(0, "pairing refused by the user")
+		a.emit(EventConnectionFailed, ConnectionFailedDTO{Reason: "Pairing refused: the fingerprints did not match. Do not share files with this peer; create new tokens and try again."})
+		a.emit(EventConnectionState, ConnectionStateDTO{State: "error", Detail: "Pairing refused: fingerprints did not match"})
+		return nil
+	}
+	a.confirmed = true
+	addr, rtt := a.pendingAddr, a.pendingRttMs
+	a.mu.Unlock()
+
+	a.emit(EventConnectionSuccess, ConnectionSuccessDTO{Addr: addr, RttMs: rtt})
+	a.emit(EventConnectionState, ConnectionStateDTO{State: "connected", Detail: fmt.Sprintf("Conectado a %s", addr), RttMs: rtt})
+	go a.startReceiverLoop()
 	return nil
 }
 
@@ -298,6 +365,7 @@ func (a *App) Disconnect() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	a.awaitingConfirm, a.confirmed = false, false
 	if a.quicConn != nil {
 		_ = a.quicConn.CloseWithError(0, "Disconnected by user")
 		a.quicConn = nil
@@ -370,10 +438,14 @@ func (a *App) GetDownloadDirectory() string {
 func (a *App) SendSelectedFile(filePath string) error {
 	a.mu.Lock()
 	conn := a.quicConn
+	confirmed := a.confirmed
 	a.mu.Unlock()
 
 	if conn == nil {
 		return fmt.Errorf("no active peer connection")
+	}
+	if !confirmed {
+		return fmt.Errorf("the pairing fingerprint has not been confirmed")
 	}
 
 	file, stats, hash, err := transfer.SelectFileToSend(filePath)
