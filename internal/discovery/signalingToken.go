@@ -31,7 +31,14 @@ type connectionCandidates struct {
 func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
 	stunClient := Client{}
 	local_ipv4, public_ipv6 := GetMachineAddrs(conn)
-	stun_response, err := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
+	var stun_response *net.UDPAddr
+	var err error
+	for _, server := range DefaultSTUNServers {
+		if stun_response, err = stunClient.SendBindingRequest(conn, server); err == nil {
+			break
+		}
+		log.Printf("[Discovery] STUN server %s failed: %v", server, err)
+	}
 	if err != nil {
 		// No public mapping available (offline / STUN blocked): advertise an unspecified
 		// address so the token is still valid; LAN and IPv6 candidates keep working.
