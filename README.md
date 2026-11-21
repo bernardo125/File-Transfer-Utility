@@ -158,7 +158,7 @@ flowchart TD
 
 Found a vulnerability? Please report it privately, see [`SECURITY.md`](SECURITY.md).
 
-What is still missing for a general release, with priorities and exit criteria: [`docs/RELEASE_READINESS_AUDIT.md`](docs/RELEASE_READINESS_AUDIT.md).
+Where the project is going: [`ROADMAP.md`](ROADMAP.md). What is still missing for a general release, with priorities and exit criteria: [`docs/RELEASE_READINESS_AUDIT.md`](docs/RELEASE_READINESS_AUDIT.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 | Property | How it is achieved |
 |---|---|
@@ -186,7 +186,7 @@ Other known limit: one file at a time per session.
 
 ## Getting started
 
-**Prerequisites:** Go 1.26+, Node 22+, and the [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation) (on Linux it needs the GTK3 and WebKitGTK development packages; on Windows, WebView2).
+**Prerequisites:** Go 1.26.11 or newer (`go.mod` pins it and the Go tool fetches it automatically), Node 22+, and the [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation) (on Linux it needs the GTK3 and WebKitGTK development packages; on Windows, WebView2).
 
 ```bash
 git clone https://github.com/bernardo125/File-Transfer-Utility.git

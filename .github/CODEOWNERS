@@ -1,0 +1,13 @@
+# Default reviewer for everything.
+*                       @bernardo125
+
+# Security-sensitive code: keep a reviewer who is not the author once more maintainers exist.
+/internal/transport/    @bernardo125
+/internal/transfer/     @bernardo125
+/internal/discovery/    @bernardo125
+/internal/connectivity/ @bernardo125
+/internal/protocol/     @bernardo125
+/pkg/ui/                @bernardo125
+/SECURITY.md            @bernardo125
+/docs/security/         @bernardo125
+/.github/workflows/     @bernardo125
