@@ -158,6 +158,8 @@ flowchart TD
 
 Found a vulnerability? Please report it privately, see [`SECURITY.md`](SECURITY.md).
 
+What is still missing for a general release, with priorities and exit criteria: [`docs/RELEASE_READINESS_AUDIT.md`](docs/RELEASE_READINESS_AUDIT.md).
+
 | Property | How it is achieved |
 |---|---|
 | Confidentiality and integrity in transit | QUIC with TLS 1.3. |
