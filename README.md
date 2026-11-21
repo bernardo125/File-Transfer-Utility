@@ -72,8 +72,10 @@ The only external service is a **public STUN server**, used solely to learn your
 | 1. Choose a role | 2. Swap tokens |
 |:--:|:--:|
 | <img src="docs/media/01-home.png" alt="Home screen with Send and Receive" width="400"> | <img src="docs/media/02-pairing.png" alt="Pairing screen showing your token and a field for the peer token" width="400"> |
-| **3. Offer a file** | **4. Stream directly** |
-| <img src="docs/media/04-incoming.png" alt="Receiver sees the incoming file and can accept or decline" width="400"> | <img src="docs/media/05-transferring.png" alt="Live progress with speed, ETA and SHA-256" width="400"> |
+| **3. Compare the fingerprint** | **4. Offer a file** |
+| <img src="docs/media/03-fingerprint.png" alt="Confirm your peer: both users compare the same pairing fingerprint and press They match" width="400"> | <img src="docs/media/05-incoming.png" alt="Receiver sees the incoming file and can accept or decline" width="400"> |
+| **5. Stream directly** | **6. Verified and saved** |
+| <img src="docs/media/06-transferring.png" alt="Live progress with speed, ETA and SHA-256" width="400"> | <img src="docs/media/07-received.png" alt="File received, verified by SHA-256, with a Show in folder button" width="400"> |
 
 > These images are generated from the real app (two real backends talking over QUIC) by `npm run docs:media` in [`tests/ui`](tests/ui), so they never drift from the UI.
 
