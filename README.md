@@ -147,15 +147,56 @@ flowchart TD
     X3 -. "stopped by" .-> S
 ```
 
-**The keys and what each one is for**
+**Cryptography step by step**
 
-| What | Lives where | For how long | Purpose |
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as You (A)
+    participant B as Your peer (B)
+
+    Note over A,B: Identity (each side, locally)
+    A->>A: Ed25519 key pair from crypto/rand<br/>kept in memory only, new on every session
+    B->>B: Same for B
+
+    Note over A,B: Pairing (over a channel nobody authenticates)
+    A-->>B: Token: A's public key + addresses + expiry + checksum<br/>(public data; SHA-256 checksum only catches typos)
+    B-->>A: Token of B
+    A->>A: Fingerprint = SHA-256(label, key A, key B), first 80 bits
+    B->>B: Same value, if no key was swapped
+    A-->>B: Users compare the code by voice. A mismatch aborts.
+
+    Note over A,B: Encrypted channel: QUIC + TLS 1.3 (mutual)
+    A->>B: ClientHello: key shares for X25519 + ML-KEM-768 (hybrid)
+    B->>A: ServerHello + self-signed X.509 certificate holding B's Ed25519 key<br/>CertificateVerify = Ed25519 signature over the handshake
+    A->>A: Pin: certificate key must equal the key from B's token
+    A->>B: A's certificate + Ed25519 CertificateVerify (client auth is required)
+    B->>B: Same pin check against A's token
+    Note over A,B: HKDF-SHA-256 derives the traffic keys.<br/>Everything after this is AEAD-protected (AES-128-GCM negotiated in our tests)
+
+    Note over A,B: File transfer (inside the encrypted channel)
+    A->>B: Offer: name, size, SHA-256 of the file
+    B->>B: Offer id = 128 random bits; user accepts that offer
+    A->>B: File bytes in 64 KiB chunks
+    B->>B: SHA-256 computed while writing, compared before the file appears
+```
+
+**The cryptographic building blocks**
+
+| Primitive | Implementation | Used for | Notes |
 |---|---|---|---|
-| **Ed25519 identity key** | Memory only, never written to disk | One session (new key each time the app starts or you disconnect) | Proves who you are during the TLS handshake. Your peer pins its public half. |
-| **Token** | Shared by you, in clear | Valid for 24 h | Your addresses and your public key. **Not a secret**; its checksum only catches typos. |
-| **Pairing fingerprint** | Computed on both sides | One pairing | Short code derived from *both* public keys. If someone swapped a key on the way, the two screens differ. |
-| **TLS 1.3 session keys** | Derived by QUIC | One connection | Encrypt and authenticate everything on the wire. |
-| **SHA-256 of the file** | Computed while receiving | One file | Detects corruption or truncation. It does not prove who made the file. |
+| **Ed25519** | Go `crypto/ed25519` | Your session identity: signs the TLS handshake; its public half is what your peer pins | Key from `crypto/rand`, memory only, never persisted |
+| **X25519 + ML-KEM-768** (hybrid) | Go `crypto/tls` defaults, through quic-go | Key exchange of every connection (forward secrecy) | Negotiated by two builds of this app in our test. The ML-KEM part is post-quantum; it depends on both peers' Go versions, otherwise X25519 alone is used |
+| **TLS 1.3** | Go `crypto/tls`, TLS 1.3 enforced | Mutual authentication, key schedule (HKDF-SHA-256) | No downgrade to older versions |
+| **QUIC packet protection** | quic-go (RFC 9001) | Encrypts and authenticates every packet and its header | AEAD: AES-128-GCM was negotiated in our tests (AES-256-GCM or ChaCha20-Poly1305 are also possible) |
+| **X.509, self-signed** | Go `crypto/x509` | A container for the Ed25519 key | No CA: trust comes from the pinned key, not from the certificate |
+| **SHA-256** (file) | Go `crypto/sha256` | Integrity of each file, computed while receiving | Proves the bytes arrived intact, not who produced them |
+| **SHA-256** (fingerprint) | Go `crypto/sha256` | The code both users compare | 80 bits of a hash over *both* public keys |
+| **SHA-256** (token checksum) | Go `crypto/sha256` | Detects a mistyped or truncated token | 32 bits, not a security control: anyone can recompute it |
+| **Random numbers** | Go `crypto/rand` | Key pairs, offer ids, STUN transaction ids | 128 bits for offers, 96 bits for STUN |
+| **ChaCha20** (legacy) | `golang.org/x/crypto` | Only to read old `v1` tokens | A constant key shipped in the binary: obfuscation, not secrecy. New tokens do not use it |
+
+No cryptographic primitive is implemented in this project: everything comes from Go's standard library, `golang.org/x/crypto` (legacy token only) and quic-go. Authentication is classical (Ed25519), so a future quantum computer could forge a *new* handshake, but traffic recorded today stays protected by the hybrid key exchange.
 
 **Where the trust comes from.** There is no server or certificate authority, so trust starts with *you and your peer*: the token carries the key, and the fingerprint comparison confirms nobody changed it. After that, the cryptography keeps the session private and tied to those two keys.
 
