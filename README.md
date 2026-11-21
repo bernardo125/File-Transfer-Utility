@@ -16,6 +16,7 @@
 [![Desktop](https://img.shields.io/badge/desktop-Wails%20%2B%20React-df0000)](#getting-started)
 [![A11y](https://img.shields.io/badge/a11y-WCAG%202.1%20AA%20(axe)-1f8434)](docs/TESTING.md)
 
+[Download](#download) ·
 [Why](#why-file-throw) ·
 [Demo](#demo) ·
 [How it works](#how-it-works) ·
@@ -31,6 +32,27 @@
 </div>
 
 ---
+
+## Download
+
+Direct links to the latest release (a single file per platform, no installer):
+
+| Platform | Download | Notes |
+|---|---|---|
+| **Windows** (64-bit) | [`ftu-windows-amd64.exe`](https://github.com/bernardo125/File-Transfer-Utility/releases/latest/download/ftu-windows-amd64.exe) | Windows 10/11 (needs the WebView2 runtime, already present on current Windows). |
+| **macOS** (Apple silicon and Intel) | [`ftu-macos-universal.zip`](https://github.com/bernardo125/File-Transfer-Utility/releases/latest/download/ftu-macos-universal.zip) | Unzip and move `ftu.app` to Applications. |
+| **Linux** (x86-64) | [`ftu-linux-amd64`](https://github.com/bernardo125/File-Transfer-Utility/releases/latest/download/ftu-linux-amd64) | Needs `libwebkit2gtk-4.1` and GTK 3. Run `chmod +x ftu-linux-amd64` first. |
+
+All files, checksums and release notes: [Releases](https://github.com/bernardo125/File-Transfer-Utility/releases).
+
+**Verify the download** (recommended): compare the file's SHA-256 with `SHA256SUMS.txt` from the same release, e.g. `sha256sum ftu-linux-amd64` (Linux), `shasum -a 256 ftu-macos-universal.zip` (macOS) or `certutil -hashfile ftu-windows-amd64.exe SHA256` (Windows).
+
+**First run.** The builds are **not code-signed yet**, so the operating system warns about an unknown publisher:
+
+- *Windows SmartScreen:* click **More info**, then **Run anyway**.
+- *macOS Gatekeeper:* right-click `ftu.app`, choose **Open**, then **Open** again (or allow it in *System Settings → Privacy & Security*).
+
+Prefer to build it yourself? See [Getting started](#getting-started).
 
 ## Why File Throw
 
@@ -105,6 +127,43 @@ sequenceDiagram
 Design notes (in Portuguese) with the reasoning behind each choice are in [`docs/notebook.md`](docs/notebook.md).
 
 ## Security model
+
+### Security architecture at a glance
+
+Every transfer goes through five checks, in this order. Each one stops a different kind of attacker:
+
+```mermaid
+flowchart TD
+    T["1. Token exchange<br/>you send your token to your peer by any channel<br/>(a public identifier, not a secret)"]
+    F["2. Fingerprint check<br/>both users read the same code to each other<br/>(this is what authenticates the pairing)"]
+    Q["3. Encrypted channel<br/>QUIC + TLS 1.3, both sides pin the Ed25519 key"]
+    C["4. Consent<br/>the receiver accepts one specific offer"]
+    S["5. Safe write<br/>temporary file, size + SHA-256 check,<br/>never overwrites an existing file"]
+    T --> F --> Q --> C --> S
+
+    X1(["Someone who alters the token<br/>on the way to your peer"]) -. "caught by" .-> F
+    X2(["Someone who only knows<br/>your IP address and port"]) -. "blocked by" .-> Q
+    X3(["A peer that lies about the file<br/>or sends hostile names"]) -. "stopped by" .-> C
+    X3 -. "stopped by" .-> S
+```
+
+**The keys and what each one is for**
+
+| What | Lives where | For how long | Purpose |
+|---|---|---|---|
+| **Ed25519 identity key** | Memory only, never written to disk | One session (new key each time the app starts or you disconnect) | Proves who you are during the TLS handshake. Your peer pins its public half. |
+| **Token** | Shared by you, in clear | Valid for 24 h | Your addresses and your public key. **Not a secret**; its checksum only catches typos. |
+| **Pairing fingerprint** | Computed on both sides | One pairing | Short code derived from *both* public keys. If someone swapped a key on the way, the two screens differ. |
+| **TLS 1.3 session keys** | Derived by QUIC | One connection | Encrypt and authenticate everything on the wire. |
+| **SHA-256 of the file** | Computed while receiving | One file | Detects corruption or truncation. It does not prove who made the file. |
+
+**Where the trust comes from.** There is no server or certificate authority, so trust starts with *you and your peer*: the token carries the key, and the fingerprint comparison confirms nobody changed it. After that, the cryptography keeps the session private and tied to those two keys.
+
+**What it does not protect against.** A peer you chose to trust can still send you a bad file (you must accept each one, and the name and size are shown). If you confirm the fingerprint without really comparing it, an attacker on the token channel could sit in the middle. Files you receive are not yet marked by the OS as "downloaded from the internet", and the builds are not code-signed yet.
+
+Full audit, threat model and per-finding status: [`docs/security`](docs/security) (including a detailed [PlantUML diagram](docs/security/SECURITY_ARCHITECTURE.puml)).
+
+### Details
 
 | Property | How it is achieved |
 |---|---|
