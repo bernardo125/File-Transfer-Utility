@@ -8,7 +8,7 @@
 | **Scope** | Everything needed to move from the current pre-release (v0.1.0) to a general release: security, quality, distribution, platforms, UX, legal, operations |
 | **Author's caveat** | Prepared by the same AI assistant that wrote the code fixes. It is a self-assessment, not an independent audit (see GA-01) |
 | **Companion documents** | [`docs/security/`](security) (audit, threat model, cryptography, remediation), [`SECURITY.md`](../SECURITY.md), [`docs/releases/v0.1.0.md`](releases/v0.1.0.md) |
-| **Backlog** | 47 issues in [`docs/release/issues/`](release/issues), created on GitHub with [`scripts/create_issues.py`](../scripts/create_issues.py) |
+| **Backlog** | 47 items (GA-01 to GA-47). 42 are GitHub issues (#12 to #53, see the index in section 7); the 5 that describe known unfixed weaknesses (GA-03, GA-05, GA-06, GA-13, GA-15) are deliberately kept out of the public tracker until the owner decides |
 
 ## 1. Executive summary
 
@@ -128,57 +128,57 @@ Order inside a milestone: P0 first, then items that change the wire format (GA-0
 
 ## 7. Backlog index
 
-Generated from the issue files (single source of truth for priority and effort). Effort is a rough estimate for one maintainer: **S** up to 2 days, **M** up to 2 weeks, **L** longer or dependent on an external party. Totals: 8 P0, 22 P1, 15 P2, 2 P3.
+Each item is tracked as a GitHub issue titled `[GA-nn] ...` (labels `priority:*`, `area:*`, `effort:*`, milestone = target release). Effort is a rough estimate for one maintainer: **S** up to 2 days, **M** up to 2 weeks, **L** longer or dependent on an external party. Totals: 8 P0, 22 P1, 15 P2, 2 P3.
 
-| ID | Issue | Area | Prio | Effort | Milestone | Owner |
-|---|---|---|:--:|:--:|---|---|
-| GA-01 | Independent security review and penetration test | security | P0 | L | v1.0 | owner + external |
-| GA-08 | Mark received files as downloaded from the internet | security | P0 | M | v0.2 | maintainer |
-| GA-16 | Windows code signing | release | P0 | M | v0.2 | owner + external |
-| GA-17 | macOS signing and notarisation | release | P0 | M | v0.2 | owner + external |
-| GA-22 | Dry-run the release workflow on all three platforms | release | P0 | S | v0.1 | owner |
-| GA-24 | CI that executes the test suite on Windows and macOS | testing | P0 | M | v0.2 | maintainer |
-| GA-29 | Webview smoke tests per OS (CSP, native dialogs, packaging) | testing | P0 | M | v0.2 | maintainer |
-| GA-43 | Vulnerability handling process | ops | P0 | S | v0.1 | owner |
-| GA-02 | Pairing authenticated by a PAKE short code (decision) *(decision)* | security | P1 | L | v0.3 | owner decision |
-| GA-03 | Authenticate hole-punch probes (challenge-response) | security | P1 | M | v0.3 | maintainer |
-| GA-04 | Product ALPN and explicit protocol versioning | security | P1 | S | v0.2 | maintainer |
-| GA-05 | Consent decided outside the renderer (native dialog) | security | P1 | M | v0.3 | maintainer |
-| GA-10 | Security self-assessment against OWASP ASVS Level 2 and re-baselined threat model | security | P1 | M | v1.0 | maintainer |
-| GA-18 | Installers and Linux packaging | release | P1 | M | v0.2 | maintainer |
-| GA-19 | Authenticated automatic update | release | P1 | L | v0.3 | maintainer |
-| GA-20 | Provenance, SBOM and signed checksums | release | P1 | M | v0.2 | maintainer |
-| GA-21 | Pin CI actions, automate dependency and vulnerability checks | release | P1 | S | v0.2 | maintainer |
-| GA-25 | Real-network test matrix | testing | P1 | L | v0.3 | maintainer + volunteers |
-| GA-26 | Large-file and resource-exhaustion tests | testing | P1 | M | v0.3 | maintainer |
-| GA-27 | Fuzzing campaign | testing | P1 | M | v0.3 | maintainer |
-| GA-31 | Verify Windows file-name and filesystem behaviour | platform | P1 | S | v0.2 | maintainer |
-| GA-33 | Connection diagnostics and actionable failure messages | network | P1 | M | v0.3 | maintainer |
-| GA-34 | Decision: connectivity fallback policy (no relay vs optional relay) *(decision)* | network | P1 | S | v0.3 | owner decision |
-| GA-35 | Exercise the IPv6 path in tests | network | P1 | M | v0.3 | maintainer |
-| GA-36 | First-run guidance for the fingerprint step | ux | P1 | S | v0.2 | maintainer |
-| GA-37 | Cancel a transfer in progress | ux | P1 | M | v0.3 | maintainer |
-| GA-40 | Privacy notice and STUN disclosure | legal | P1 | S | v0.2 | owner |
-| GA-41 | Third-party licence inventory | legal | P1 | S | v0.2 | maintainer |
-| GA-45 | Release process, versioning and rollback | ops | P1 | S | v0.2 | maintainer |
-| GA-46 | Branch protection, required checks and repository hygiene | ops | P1 | S | v0.1 | owner |
-| GA-06 | Bind the data stream to the approved offer | security | P2 | M | v0.3 | maintainer |
-| GA-07 | Persistent identity and trusted-peer store (decision) *(decision)* | security | P2 | L | v0.3 | owner decision |
-| GA-09 | Retire legacy v1 tokens | security | P2 | S | v1.0 | maintainer |
-| GA-11 | CLI parity with the desktop app's limits | security | P2 | S | v0.2 | maintainer |
-| GA-12 | Free-space precheck on Windows | app | P2 | S | v0.2 | maintainer |
-| GA-13 | Review clipboard, drag-and-drop and external-open exposure | app | P2 | S | v0.2 | maintainer |
-| GA-14 | Logging policy: structured, redacted, user-controllable | app | P2 | M | v0.3 | maintainer |
-| GA-15 | Bound inbound connection attempts and resource use | app | P2 | M | v0.3 | maintainer |
-| GA-23 | Reproducible-build check | release | P2 | M | v1.0 | maintainer |
-| GA-28 | Coverage and mutation gates | testing | P2 | S | v1.0 | maintainer |
-| GA-30 | Accessibility verification with assistive technology | testing | P2 | M | v1.0 | maintainer + testers |
-| GA-32 | Linux runtime compatibility matrix | platform | P2 | S | v0.2 | maintainer |
-| GA-38 | Consistent language and messages | ux | P2 | M | v0.3 | maintainer |
-| GA-42 | Name and branding check | legal | P2 | S | v1.0 | owner |
-| GA-44 | Community and contribution files | ops | P2 | S | v0.2 | maintainer |
-| GA-39 | Resume interrupted transfers (decision) *(decision)* | ux | P3 | L | post-1.0 | owner decision |
-| GA-47 | Telemetry and crash-reporting stance *(decision)* | ops | P3 | S | v1.0 | owner decision |
+| ID | Title | GitHub | Area | Prio | Effort | Milestone | Owner |
+|---|---|---|---|:--:|:--:|---|---|
+| GA-01 | Independent security review and penetration test | #12 | security | P0 | L | v1.0 | owner + external |
+| GA-08 | Mark received files as downloaded from the internet | #16 | security | P0 | M | v0.2 | maintainer |
+| GA-16 | Windows code signing | #22 | release | P0 | M | v0.2 | owner + external |
+| GA-17 | macOS signing and notarisation | #23 | release | P0 | M | v0.2 | owner + external |
+| GA-22 | Dry-run the release workflow on all three platforms | #28 | release | P0 | S | v0.1 | owner |
+| GA-24 | CI that executes the test suite on Windows and macOS | #30 | testing | P0 | M | v0.2 | maintainer |
+| GA-29 | Webview smoke tests per OS (CSP, native dialogs, packaging) | #35 | testing | P0 | M | v0.2 | maintainer |
+| GA-43 | Vulnerability handling process | #49 | ops | P0 | S | v0.1 | owner |
+| GA-02 | Pairing authenticated by a PAKE short code (decision) *(decision)* | #13 | security | P1 | L | v0.3 | owner decision |
+| GA-03 | Authenticate hole-punch probes (challenge-response) | not created | security | P1 | M | v0.3 | maintainer |
+| GA-04 | Product ALPN and explicit protocol versioning | #14 | security | P1 | S | v0.2 | maintainer |
+| GA-05 | Consent decided outside the renderer (native dialog) | not created | security | P1 | M | v0.3 | maintainer |
+| GA-10 | Security self-assessment against OWASP ASVS Level 2 and re-baselined threat model | #18 | security | P1 | M | v1.0 | maintainer |
+| GA-18 | Installers and Linux packaging | #24 | release | P1 | M | v0.2 | maintainer |
+| GA-19 | Authenticated automatic update | #25 | release | P1 | L | v0.3 | maintainer |
+| GA-20 | Provenance, SBOM and signed checksums | #26 | release | P1 | M | v0.2 | maintainer |
+| GA-21 | Pin CI actions, automate dependency and vulnerability checks | #27 | release | P1 | S | v0.2 | maintainer |
+| GA-25 | Real-network test matrix | #31 | testing | P1 | L | v0.3 | maintainer + volunteers |
+| GA-26 | Large-file and resource-exhaustion tests | #32 | testing | P1 | M | v0.3 | maintainer |
+| GA-27 | Fuzzing campaign | #33 | testing | P1 | M | v0.3 | maintainer |
+| GA-31 | Verify Windows file-name and filesystem behaviour | #37 | platform | P1 | S | v0.2 | maintainer |
+| GA-33 | Connection diagnostics and actionable failure messages | #39 | network | P1 | M | v0.3 | maintainer |
+| GA-34 | Decision: connectivity fallback policy (no relay vs optional relay) *(decision)* | #40 | network | P1 | S | v0.3 | owner decision |
+| GA-35 | Exercise the IPv6 path in tests | #41 | network | P1 | M | v0.3 | maintainer |
+| GA-36 | First-run guidance for the fingerprint step | #42 | ux | P1 | S | v0.2 | maintainer |
+| GA-37 | Cancel a transfer in progress | #43 | ux | P1 | M | v0.3 | maintainer |
+| GA-40 | Privacy notice and STUN disclosure | #46 | legal | P1 | S | v0.2 | owner |
+| GA-41 | Third-party licence inventory | #47 | legal | P1 | S | v0.2 | maintainer |
+| GA-45 | Release process, versioning and rollback | #51 | ops | P1 | S | v0.2 | maintainer |
+| GA-46 | Branch protection, required checks and repository hygiene | #52 | ops | P1 | S | v0.1 | owner |
+| GA-06 | Bind the data stream to the approved offer | not created | security | P2 | M | v0.3 | maintainer |
+| GA-07 | Persistent identity and trusted-peer store (decision) *(decision)* | #15 | security | P2 | L | v0.3 | owner decision |
+| GA-09 | Retire legacy v1 tokens | #17 | security | P2 | S | v1.0 | maintainer |
+| GA-11 | CLI parity with the desktop app's limits | #19 | security | P2 | S | v0.2 | maintainer |
+| GA-12 | Free-space precheck on Windows | #20 | app | P2 | S | v0.2 | maintainer |
+| GA-13 | Review clipboard, drag-and-drop and external-open exposure | not created | app | P2 | S | v0.2 | maintainer |
+| GA-14 | Logging policy: structured, redacted, user-controllable | #21 | app | P2 | M | v0.3 | maintainer |
+| GA-15 | Bound inbound connection attempts and resource use | not created | app | P2 | M | v0.3 | maintainer |
+| GA-23 | Reproducible-build check | #29 | release | P2 | M | v1.0 | maintainer |
+| GA-28 | Coverage and mutation gates | #34 | testing | P2 | S | v1.0 | maintainer |
+| GA-30 | Accessibility verification with assistive technology | #36 | testing | P2 | M | v1.0 | maintainer + testers |
+| GA-32 | Linux runtime compatibility matrix | #38 | platform | P2 | S | v0.2 | maintainer |
+| GA-38 | Consistent language and messages | #44 | ux | P2 | M | v0.3 | maintainer |
+| GA-42 | Name and branding check | #48 | legal | P2 | S | v1.0 | owner |
+| GA-44 | Community and contribution files | #50 | ops | P2 | S | v0.2 | maintainer |
+| GA-39 | Resume interrupted transfers (decision) *(decision)* | #45 | ux | P3 | L | post-1.0 | owner decision |
+| GA-47 | Telemetry and crash-reporting stance *(decision)* | #53 | ops | P3 | S | v1.0 | owner decision |
 
 ## 8. General-release go / no-go checklist
 
@@ -250,7 +250,6 @@ go install golang.org/x/vuln/cmd/govulncheck@latest
 wails build -platform linux/amd64 -tags webkit2_41 -o ftu-linux-amd64   # then:
 govulncheck -mode=binary build/bin/ftu-linux-amd64                       # scan the artefact, not only the source
 go install github.com/rhysd/actionlint/cmd/actionlint@latest && actionlint .github/workflows/*.yml
-python3 scripts/create_issues.py            # preview the GitHub issues (dry run)
 ```
 
 ## Appendix D. Open audit findings carried into the backlog
