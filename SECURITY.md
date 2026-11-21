@@ -55,6 +55,7 @@ upstream).
 A plain-language summary is in the [README](README.md#security-model). Details:
 
 - cryptography, keys and known limits: [`docs/security/CRYPTOGRAPHY.md`](docs/security/CRYPTOGRAPHY.md)
+- how reports are handled and how fixes are released: [`docs/security/VULNERABILITY_HANDLING.md`](docs/security/VULNERABILITY_HANDLING.md)
 - threat model: [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md)
 - audit findings and remediation status: [`docs/security/SECURITY_AUDIT.md`](docs/security/SECURITY_AUDIT.md)
 
