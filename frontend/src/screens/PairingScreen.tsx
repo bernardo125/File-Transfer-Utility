@@ -131,7 +131,7 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
         <Panel title={awaitingConfirmation ? 'Confirm your peer' : connecting ? 'Connecting to peer' : 'Pair with your peer'} className="w-full max-w-3xl">
           <div className="grid items-center gap-6 md:grid-cols-[220px_1fr]">
           <div className="flex flex-col items-center gap-3 p-5 pr-0 text-center max-md:pr-5">
-            <PairingVisual countdown={connecting ? { remaining, total: CONNECT_TIMEOUT_S } : undefined} />
+            <PairingVisual countdown={connecting && !awaitingConfirmation ? { remaining, total: CONNECT_TIMEOUT_S } : undefined} />
             <p className="max-w-[200px] text-[0.6875rem] text-dim">
               Tokens are exchanged by you, not by a server. Both peers connect directly.
             </p>
