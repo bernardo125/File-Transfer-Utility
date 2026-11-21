@@ -7,7 +7,7 @@
 | **Baseline** | branch `security/hardening-2026-11-20`, commit `036c4a7` plus the commit that adds this document |
 | **Scope** | Everything needed to move from the current pre-release (v0.1.0) to a general release: security, quality, distribution, platforms, UX, legal, operations |
 | **Author's caveat** | Prepared by the same AI assistant that wrote the code fixes. It is a self-assessment, not an independent audit (see GA-01) |
-| **Companion documents** | [`docs/security/`](security) (audit, threat model, cryptography, remediation), [`SECURITY.md`](../SECURITY.md), [`docs/releases/v0.1.0.md`](releases/v0.1.0.md) |
+| **Companion documents** | [`docs/security/`](security) (audit, threat model, cryptography, remediation), [`SECURITY.md`](../SECURITY.md) |
 | **Backlog** | 47 items (GA-01 to GA-47). 42 are GitHub issues (#12 to #53, see the index in section 7); the 5 that describe known unfixed weaknesses (GA-03, GA-05, GA-06, GA-13, GA-15) are deliberately kept out of the public tracker until the owner decides |
 
 ## 1. Executive summary

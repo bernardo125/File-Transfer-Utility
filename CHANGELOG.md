@@ -6,7 +6,7 @@ between releases.
 
 ## [0.1.0] - unreleased
 
-First public pre-release. Release notes: [`docs/releases/v0.1.0.md`](docs/releases/v0.1.0.md).
+First public pre-release. The release page on GitHub carries the download table, checksums and the limitations below.
 
 ### Added
 - Direct peer-to-peer file transfer (QUIC, TLS 1.3, mutual Ed25519 authentication), desktop app and `--cli` mode.

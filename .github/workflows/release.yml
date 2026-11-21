@@ -72,7 +72,6 @@ jobs:
     permissions:
       contents: write # create the release and upload assets; nothing else gets this permission
     steps:
-      - uses: actions/checkout@v4 # for the release notes file
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -89,10 +88,11 @@ jobs:
           # v0.x and any tag with a suffix (v1.0.0-rc1) are published as pre-releases.
           flags=()
           if [[ "$TAG" == v0.* || "$TAG" == *-* ]]; then flags+=(--prerelease); fi
-          # Hand-written notes win; otherwise fall back to GitHub's generated notes.
-          if [[ -f "docs/releases/${TAG}.md" ]]; then
-            flags+=(--notes-file "docs/releases/${TAG}.md")
-          else
-            flags+=(--generate-notes)
-          fi
-          gh release create "$TAG" dist/* --repo "$REPO" --title "File Throw $TAG" "${flags[@]}"
+          # GitHub generates the change list; this text is put in front of it.
+          notes=$'Direct peer-to-peer file transfer, no server in the middle.\n\n'
+          notes+=$'**Read first**\n'
+          notes+=$'- Pre-release: code-reviewed, but not independently audited.\n'
+          notes+=$'- The binaries are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will warn about an unknown publisher.\n'
+          notes+=$'- After connecting, both users must compare the pairing fingerprint and confirm it before anything can be sent.\n'
+          notes+=$'- Verify the download against `SHA256SUMS.txt`. Limitations and security details: see the README and SECURITY.md.\n'
+          gh release create "$TAG" dist/* --repo "$REPO" --title "File Throw $TAG" --notes "$notes" --generate-notes "${flags[@]}"
