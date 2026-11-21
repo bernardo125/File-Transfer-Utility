@@ -146,3 +146,6 @@ vite.config.ts.timestamp-*
 .claude/
 graphify-out/
 CLAUDE.md
+
+# Wails build output
+build/bin/

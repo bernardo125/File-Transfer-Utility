@@ -1,0 +1,89 @@
+name: release
+# Builds the desktop app for Windows, macOS and Linux and attaches the files to a GitHub Release.
+# Trigger: push a tag such as v1.0.0 (git tag v1.0.0 && git push origin v1.0.0), or run it manually.
+#
+# The asset names are FIXED (no version in the name) so the README can link to
+#   https://github.com/bernardo125/File-Transfer-Utility/releases/latest/download/<asset>
+# and always get the newest release.
+#
+# The binaries are NOT code-signed yet (see docs/security): Windows SmartScreen and macOS Gatekeeper
+# will warn until signing is added.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.15.0 # keep equal to github.com/wailsapp/wails/v2 in go.mod
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-22.04
+            args: -platform linux/amd64 -tags webkit2_41
+            output: ftu-linux-amd64
+          - name: windows
+            os: windows-latest
+            args: -platform windows/amd64
+            output: ftu-windows-amd64.exe
+          - name: macos
+            os: macos-latest
+            args: -platform darwin/universal
+            output: ftu-macos-universal.zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - name: Linux build dependencies
+        if: matrix.name == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+      - name: Build (Linux, Windows)
+        if: matrix.name != 'macos'
+        run: wails build ${{ matrix.args }} -o ${{ matrix.output }}
+      - name: Build (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          wails build ${{ matrix.args }}
+          ditto -c -k --keepParent build/bin/ftu.app "build/bin/${{ matrix.output }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: build/bin/${{ matrix.output }}
+          if-no-files-found: error
+
+  publish:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload assets; nothing else gets this permission
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum ftu-* | tee SHA256SUMS.txt
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "File Throw ${{ github.ref_name }}" \
+            --generate-notes
