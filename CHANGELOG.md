@@ -4,9 +4,11 @@ All notable changes to File Throw. The format follows [Keep a Changelog](https:/
 and the project uses [Semantic Versioning](https://semver.org/). Versions below 1.0.0 may change behaviour
 between releases.
 
-## [0.1.0] - unreleased
+## [Unreleased]
 
-First public pre-release. The release page on GitHub carries the download table, checksums and the limitations below.
+## [0.1.0] - 2026-11-21
+
+First public release, **beta**: code-reviewed, not independently audited, binaries not code-signed. The release page on GitHub carries the checksums and the limitations below.
 
 ### Added
 - Direct peer-to-peer file transfer (QUIC, TLS 1.3, mutual Ed25519 authentication), desktop app and `--cli` mode.
@@ -14,7 +16,8 @@ First public pre-release. The release page on GitHub carries the download table,
 - Mandatory pairing-fingerprint confirmation in the desktop app and the CLI before any data flows.
 - Per-offer consent identifiers; one offer at a time.
 - Production Content-Security-Policy; `SECURITY.md`; security audit, threat model and cryptography reference in `docs/security`.
-- Release workflow (Windows, macOS, Linux) with stable asset names and `SHA256SUMS.txt`.
+- Release workflow (Windows, macOS, Linux) with stable asset names and `SHA256SUMS.txt`. Versions `0.x` are published as normal releases titled "(beta)" so the `releases/latest` download links work.
+- Vulnerability handling procedure and emergency release steps (`docs/security/VULNERABILITY_HANDLING.md`).
 
 ### Changed
 - Received files go to a private temporary file and are published only after size and SHA-256 match; an existing file is never overwritten.
