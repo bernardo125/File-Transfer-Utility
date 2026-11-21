@@ -1,0 +1,94 @@
+import { useEffect, useState } from 'react';
+import { LogOut } from 'lucide-react';
+import { useTransferController } from '../hooks/useTransferController';
+import { describePhase } from '../lib/transferPhase';
+import { AppHeader } from '../components/layout/AppHeader';
+import { ConnectionIndicator } from '../components/layout/ConnectionIndicator';
+import { Button } from '../components/ui/Button';
+import { Notice } from '../components/ui/Notice';
+import { FlightPath } from '../components/transfer/FlightPath';
+import { TransferDetails } from '../components/transfer/TransferDetails';
+import { TransferActions } from '../components/transfer/TransferActions';
+import type { PeerRole } from '../types/navigation';
+
+interface TransferScreenProps {
+  role: PeerRole;
+  onExit: () => void;
+}
+
+const CONFIRM_WINDOW_MS = 4000;
+
+export function TransferScreen({ role, onExit }: TransferScreenProps) {
+  const controller = useTransferController(role);
+  const { phase, file, progress, completed, errorText, connection, disconnect } = controller;
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
+
+  const busy = phase === 'transferring' || phase === 'verifying';
+  const peerLost = connection.state === 'error' || connection.state === 'idle';
+  const copy = describePhase(phase, role);
+  const fraction = progress && progress.totalBytes > 0 ? Math.min(1, progress.bytesTransferred / progress.totalBytes) : null;
+
+  useEffect(() => {
+    if (!confirmingDisconnect) return;
+    const id = window.setTimeout(() => setConfirmingDisconnect(false), CONFIRM_WINDOW_MS);
+    return () => window.clearTimeout(id);
+  }, [confirmingDisconnect]);
+
+  const handleDisconnect = async () => {
+    // Disconnecting mid-transfer aborts it, so ask for a second click first.
+    if (busy && !peerLost && !confirmingDisconnect) {
+      setConfirmingDisconnect(true);
+      return;
+    }
+    await disconnect();
+    onExit();
+  };
+
+  return (
+    <>
+      <AppHeader
+        leading={
+          <Button variant={confirmingDisconnect ? 'danger' : 'ghost'} size="sm" icon={LogOut} onClick={handleDisconnect}>
+            {confirmingDisconnect ? 'Stop transfer & disconnect?' : 'Disconnect'}
+          </Button>
+        }
+        center={<ConnectionIndicator state={connection.state} rttMs={connection.rttMs} />}
+      />
+      <p role="status" className="sr-only">
+        {confirmingDisconnect ? 'Disconnecting will stop the transfer. Activate the button again within four seconds to confirm.' : ''}
+      </p>
+      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-4 pt-12 max-sm:pb-16">
+        <div className="flex w-full max-w-3xl flex-col items-center gap-4">
+          <FlightPath role={role} phase={phase} fraction={fraction} />
+
+          <div className="text-center" aria-live={phase === 'deciding' || phase === 'failed' ? 'assertive' : 'polite'} aria-atomic="true">
+            <h1 className={`text-base font-semibold ${phase === 'failed' ? 'text-danger' : 'text-fg'}`}>{copy.title}</h1>
+            <p className="mt-0.5 text-xs text-muted">{copy.detail}</p>
+          </div>
+
+          {peerLost && (
+            <div className="w-full">
+              <Notice tone="error">
+                {connection.detail || 'The connection to your peer was lost.'} Disconnect and pair again to continue.
+              </Notice>
+            </div>
+          )}
+
+          {file && (
+            <div key={file.name + file.size} className="anim-fade-up w-full">
+              <TransferDetails role={role} file={file} phase={phase} progress={progress} completed={completed} />
+            </div>
+          )}
+
+          {phase === 'failed' && errorText && (
+            <div className="w-full">
+              <Notice tone="error">{errorText}</Notice>
+            </div>
+          )}
+
+          {!peerLost && <TransferActions role={role} controller={controller} />}
+        </div>
+      </main>
+    </>
+  );
+}

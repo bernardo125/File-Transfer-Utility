@@ -1,0 +1,296 @@
+' File Throw (FTU) - Security & key architecture AFTER the proposed remediation (REMEDIATION_PLAN.md)
+' Three diagrams in one file (PlantUML renders each start/end block as its own image):
+'   1) Components, trust boundaries and key material
+'   2) Pairing + handshake sequence
+'   3) Receive pipeline (consent -> temp file -> verify -> atomic publish)
+' Legend: [F-xx] = finding addressed by that item. (DECISION) = needs explicit approval before implementation.
+' IMPLEMENTED on branch security/hardening-2026-11-20: F-01,02,03(option B),04(layer 1),05,06,07,08,09,10(pin),11,12,13,14,18.
+' DEFERRED (shown in the diagrams as the target, marked DEFERRED where they appear): PUNCH challenge-response (F-04 layer 2),
+' ALPN rename (F-10), PAKE (F-03 option A), MOTW/quarantine (M-01), signed releases/updater/CI hardening (M-02..M-05, F-17).
+
+@startuml FTU_1_Components_Keys
+title File Throw (FTU) - Security architecture and key material (target state)
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam defaultFontSize 12
+skinparam packageStyle rectangle
+skinparam rectangle {
+  RoundCorner 8
+}
+skinparam note {
+  BackgroundColor #FFF8DC
+  BorderColor #B8860B
+}
+
+legend right
+  | Color | Meaning |
+  | <back:#E8F5E9>   </back> | Trusted (backend, in-process) |
+  | <back:#FFEBEE>   </back> | Untrusted input / network |
+  | <back:#FFF3E0>   </back> | Reduced trust (renderer) |
+  | <back:#E3F2FD>   </back> | Key material |
+endlegend
+
+package "Host A (user machine)" as HA {
+
+  rectangle "Renderer (React 19, CSP default-src 'self')\nREDUCED TRUST [F-06]" as UI #FFF3E0 {
+    component "Pairing / Transfer UI\n(no dev mock in prod build)" as UIc
+    component "Consent dialog\nshows SANITISED on-disk name\n+ offerID [F-02][F-05]" as UIconsent
+  }
+
+  rectangle "Go backend (TRUSTED - enforces every check)" as BE #E8F5E9 {
+
+    rectangle "Wails binding layer  [F-06]" as BIND {
+      component "ConnectPeer(token)" as bCon
+      component "SelectFileNative / drop\n-> returns HANDLE (not a path)" as bSel
+      component "SendSelectedFile(handle)\nonly previously-selected files" as bSend
+      component "RespondIncomingTransfer(offerID, accept)\nsingle active offer, ID validated" as bResp
+      component "OpenFolder(path)\nonly inside downloadDir (EvalSymlinks+Rel)\nxdg-open -- path" as bOpen
+    }
+
+    rectangle "Identity & token (internal/discovery)" as ID {
+      component "Ed25519 keypair\ncrypto/rand, per session,\nmemory only, never persisted\nzeroed on Disconnect" as KEY #E3F2FD
+      component "Token codec  (DECISION: v2) [F-03]\nmagic | version | payload | checksum\nPUBLIC identifier, NOT a secret\nv1 (44/62 B) accepted for N releases + warning" as TOK #E3F2FD
+      component "Candidate validator [F-12]\nreject port 0, 0.0.0.0, multicast,\nbroadcast; omit IPv6 if absent" as CAND
+      component "Pairing confirmation gate [F-03]\nMANDATORY fingerprint (SAS) of BOTH pubkeys\nbackend refuses data channel until user confirms\n(not skippable by renderer)\nOption A: PAKE short code (new dep, DECISION)\nconfirmed fingerprints may be remembered locally" as SAS #E3F2FD
+      component "STUN client [F-08]\ncheck type 0x0101, cookie, txid,\nlength, source = queried server;\nretry / next server" as STUN
+    }
+
+    rectangle "Connectivity (internal/connectivity)" as CONN {
+      component "Hole punch [F-04][F-07][F-13]\ncancellable (context), ONE absolute deadline\nlayer 1: source IP must match a token candidate\nlayer 2 (DEFERRED): challenge-response PUNCH_REQ/RSP\nsig = Ed25519(nonceA|nonceB|src|dst), replay-safe\nIMPLEMENTED: fallback to next token candidate\nPUNCH format unchanged (33 bytes)" as HP
+    }
+
+    rectangle "Transport (internal/transport)" as TR {
+      component "QUIC / TLS 1.3 only\nmTLS: RequireAnyClientCert\nself-signed Ed25519 cert (validity set)\nPIN in VerifyConnection [F-10]\n(runs on resumption too)\nALPN ftu/1 (DEFERRED: wire change)" as TLS
+      component "Role selection\nbytes.Compare(myPub, peerPub) > 0 => listener" as ROLE
+    }
+
+    rectangle "Protocol (internal/protocol)" as PR {
+      component "Framing: u32 length <= 64 KiB\ncheck BEFORE alloc; read deadlines [F-09]" as FRM
+      component "DecodeRequest validation [F-05]\nUTF-8, <=255 B, no Cc/Cf/Zl/Zp/NUL,\nsize >= 0, hash = 64 lowercase hex" as DEC
+      component "Offer state machine [F-02]\none offer at a time, offerID (128-bit random)\nstale / duplicate decisions rejected\n120 s timeout" as OFFER
+    }
+
+    rectangle "Transfer & filesystem (internal/transfer)" as TF {
+      component "SanitizeFileName [F-01]\nreject .., NUL, reserved names,\nADS ':', trailing dot/space,\ndotfile policy, <=255 B" as SAN
+      component "Receive pipeline [F-01][F-09][F-14]\naccept uni stream (deadline) -> os.Root(downloadDir)\ntemp .part via O_EXCL 0600 -> 64 KiB chunks + SHA-256\nLimitReader(size), EOF check, free-space check" as RCV
+      component "No-clobber publish [F-01]\nRoot.Link(tmp, final), NEVER os.Rename\n(rename replaces existing files)\n'name (1).ext' on EEXIST; O_EXCL copy fallback\ncleanup on error/cancel, sweep stale .part" as PUB
+      component "Mark-of-the-Web / quarantine [M-01] (DEFERRED)\nWindows Zone.Identifier ZoneId=3\nmacOS com.apple.quarantine\nfailure logged, never fails transfer" as MOTW
+    }
+  }
+
+  rectangle "Release & supply chain (outside runtime)  [F-17][M-02..M-04] (DEFERRED - planned)" as REL #F3E5F5 {
+    component "Signed builds\nAuthenticode / notarised / signed packages\nSBOM + provenance attestations" as SIGN
+    component "Authenticated updater [M-03]\nverifies signature with pinned release key\nrejects unsigned/downgraded updates\n(client -> release host only; no relay)" as UPD
+    component "CI: actions pinned by SHA, govulncheck,\nnpm audit, Dependabot, fuzz, Win/macOS runners\nSECURITY.md + private disclosure [M-04][M-05]" as CI
+  }
+
+  database "Download dir\n(from native directory dialog only)" as DL
+  database "Source files\n(only handles from native dialog / drop)" as SRC
+}
+
+cloud "Network (UNTRUSTED)" as NET #FFEBEE {
+  component "STUN servers\n(public; unauthenticated)" as STUNS
+  component "Attacker: UDP injection,\nforged PUNCH/STUN, token MITM" as ATK
+}
+
+package "Host B (peer)  - same architecture" as HB {
+  component "FTU backend B\n(own session Ed25519 key)" as BEB
+}
+
+UIc --> bCon
+UIc --> bSel
+UIc --> bSend
+UIconsent --> bResp
+UIc ..> bOpen
+bSel --> SRC : native dialog
+bSend --> SRC : handle lookup only
+bCon --> TOK : decode
+TOK --> CAND
+TOK --> SAS
+KEY --> TOK : pubkey embedded
+KEY --> TLS : private key signs\nCertificateVerify
+STUN --> STUNS : binding request
+STUN ..> TOK : mapped address
+CAND --> HP
+HP --> ROLE : verified remote addr
+ROLE --> TLS
+TLS --> FRM : control stream
+FRM --> DEC
+DEC --> OFFER
+OFFER --> bResp : emit transfer:incoming(offerID)
+OFFER --> SAN : after ACCEPT
+SAN --> RCV
+RCV --> PUB
+PUB --> MOTW
+MOTW --> DL
+SIGN --> UPD : same pinned release key
+CI ..> SIGN
+TOK --> SAS : peer pubkey
+SAS --> TLS : data channel opens only\nafter user confirmation
+TLS <--> BEB : QUIC/TLS 1.3 (mutual pin)
+ATK ..> HP : forged PUNCH (ignored unless\nsource matches candidate)
+ATK ..> STUN : forged reply (txid/source check fails)
+ATK ..> TOK : edited token -> checksum fails;\nrecomputed checksum -> caught by\nMANDATORY fingerprint confirmation
+
+note bottom of KEY
+  Keys in the system
+  1. Ed25519 identity key: per session, memory only.
+  2. Token codec key: PUBLIC constant, used only for corruption detection.
+     Never described as secret/confidential [F-03].
+  3. TLS 1.3 ephemeral (EC)DHE + AEAD keys: derived by QUIC per connection.
+  4. SHA-256: integrity of the payload only (not origin authenticity) [F-15].
+  No custom primitives; no persisted private keys.
+end note
+
+note bottom of TLS
+  Trust root = the token the users exchange.
+  The token checksum only detects accidents (anyone can
+  recompute it). Authentication comes from mutual key
+  pinning + MANDATORY fingerprint confirmation (or PAKE,
+  Option A). An attacker without the private key cannot
+  authenticate.
+  Residual: pairing can fail behind symmetric NAT/CGNAT
+  (no relay by design [M-06]).
+end note
+@enduml
+
+
+@startuml FTU_2_Pairing_Handshake
+title Pairing, key pinning and QUIC/TLS 1.3 handshake (target state)
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+autonumber
+
+actor "User A" as UA
+participant "FTU A\n(backend)" as A
+participant "STUN server" as S
+participant "FTU B\n(backend)" as B
+actor "User B" as UB
+
+== 1. Session identity (each side, independently) ==
+UA -> A : Open app / GetMyToken
+A -> A : Generate Ed25519 keypair (crypto/rand)\nkept in memory only
+A -> S : STUN Binding Request (txid random)
+S --> A : Binding Response
+A -> A : Validate type 0x0101, cookie, txid,\nlength, source == queried server [F-08]
+A -> A : Build token "ftu2." + b64url(magic|ver|flags|pubkey|\ncandidates|expiry|checksum) (DECISION) [F-03]
+A --> UA : Token (public identifier, NOT a secret)
+
+== 2. Out-of-band exchange (user-chosen channel) ==
+UA -> UB : Token A
+UB -> UA : Token B
+note over UA, UB
+  Trust root. The checksum detects typos/accidents only;
+  anyone can recompute it. Authentication happens in step 3b.
+end note
+
+== 3. Token validation ==
+UA -> A : ConnectPeer(token B)
+A -> A : Decode, check magic/version/checksum,\nreject special addresses & port 0 [F-12]\nreject own key (ErrSameAddress)
+A -> A : Pin peer pubkey = pubkey from token B
+
+== 3b. Pairing confirmation (mandatory) [F-03] ==
+A --> UA : Show fingerprint of (pubA, pubB), e.g. 65B6-0673-D6ED-884B
+B --> UB : Show the same fingerprint
+UA <-> UB : Compare out of band (voice / second channel)
+UA -> A : ConfirmPeerFingerprint(ok)
+UB -> B : ConfirmPeerFingerprint(ok)
+note over A, B
+  Backend enforces: no data channel before confirmation
+  (renderer cannot skip it). Mismatch => abort and discard.
+  Option A (DECISION): short-code PAKE replaces the manual comparison.
+  Confirmed fingerprints may be remembered locally (user-clearable).
+end note
+
+== 4. Hole punching (shared UDP socket) ==
+A -> B : PUNCH_REQ(pubA, nonceA) to token candidates
+B -> B : Source IP must match a token candidate [F-04]\nrate-limit per source
+B --> A : PUNCH_RSP(pubB, nonceA, nonceB,\nsig = Ed25519(privB, nonceA|nonceB|src|dst))
+A -> A : Verify sig with pinned pubB, nonceA is recent\n=> address VERIFIED (replay/forgery fail)\none absolute deadline [F-07]; cancellable [F-13]
+note right of A
+  Forged PUNCH from another source is ignored;
+  if the first verified address fails the dial,
+  the next verified candidate is tried.
+  Legacy 33-byte PUNCH is accepted for one release
+  (filter-only, with a warning).
+end note
+
+== 5. Role selection (deterministic) ==
+A -> A : bytes.Compare(pubA, pubB) > 0 ?\nlistener : dialer
+B -> B : same rule (opposite outcome)
+
+== 6. QUIC / TLS 1.3 mutual authentication ==
+B -> A : QUIC Initial + ClientHello\nALPN ftu/1 (DECISION)
+A --> B : ServerHello, cert(pubA), CertificateRequest,\nCertificateVerify (signed with privA)
+B -> B : VerifyConnection: cert key == pubA from token A,\nTLS 1.3, ALPN ok  [F-10]\n(also enforced on resumption)
+B --> A : cert(pubB), CertificateVerify (signed with privB)
+A -> A : VerifyConnection: cert key == pubB from token B
+alt key mismatch / no cert / bad ALPN
+  A --> B : handshake aborted (no stream accepted)
+else mutual pin OK
+  A <-> B : 1-RTT keys (TLS 1.3 AEAD) - session established
+end
+
+== 7. Teardown ==
+UA -> A : Disconnect
+A -> A : CloseWithError, close socket,\nzero private key, drop token
+@enduml
+
+
+@startuml FTU_3_Receive_Pipeline
+title Receive pipeline: consent, temp file, verification, atomic publish (target state)
+skinparam shadowing false
+autonumber
+
+participant "Sender (authenticated peer)" as S
+participant "Receiver backend" as R
+participant "Renderer UI" as UI
+actor "User" as U
+database "Download dir" as D
+
+S -> R : Control stream: [len u32 <= 64 KiB][JSON{name,size,sha256}]
+R -> R : Check len <= 64 KiB BEFORE alloc [read deadline F-09]
+R -> R : DecodeRequest: UTF-8, <=255 B, no control/bidi chars,\nsize>=0, hash=64 lowercase hex [F-05]
+alt invalid
+  R --> S : 400 Bad Request
+else valid
+  R -> R : Pending offer? -> if yes reply 409/429 [F-02]
+  R -> R : offerID = random 128-bit; name' = SanitizeFileName(name) [F-01]
+  R -> UI : transfer:incoming{offerID, name', size, hash}\n(+ "will be saved as name (1).ext" if it would collide)
+  UI -> U : Consent dialog (sanitised name)
+  U -> UI : Accept / Reject
+  UI -> R : RespondIncomingTransfer(offerID, accept)
+  R -> R : offerID matches active offer? else error [F-02]
+  alt Reject or 120 s timeout
+    R --> S : 403 Forbidden
+  else Accept
+    R -> R : Free space >= size? else 406 [F-14]
+    R --> S : 100 Continue
+    S -> R : Uni data stream (64 KiB chunks)
+    R -> R : AcceptUniStream with deadline; stall detector [F-09]
+    R -> D : open download dir as os.Root;\ncreate .ftu-<rand>.part (O_EXCL, 0600)\n(only AFTER stream accepted) [F-01]
+    loop until size bytes
+      S -> R : chunk
+      R -> D : write chunk
+      R -> R : hasher.Write(chunk)  (bounded memory)
+    end
+    R -> R : Require EOF (no trailing bytes); size == announced [F-14]
+    R -> D : fsync
+    R -> R : sha256 == announced? (empty hash => fail closed) [F-14]
+    alt any failure / cancel / crash
+      R -> D : remove .part (stale .part swept on start)
+      R --> S : 409 / 500 (distinct codes)
+      R -> UI : transfer:error
+    else verified
+      R -> D : no-clobber publish: Root.Link(tmp, final), remove tmp;\n'name (1).ext' on EEXIST (never os.Rename: it replaces files)
+      R -> D : Mark-of-the-Web / quarantine xattr [M-01]\n(failure logged, does not fail the transfer)
+      R --> S : 200 OK
+      R -> UI : transfer:completed{final path}
+    end
+  end
+end
+note over R
+  SHA-256 proves transport integrity only.
+  It does not authenticate the origin of the file [F-15].
+end note
+@enduml

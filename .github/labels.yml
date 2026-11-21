@@ -1,0 +1,21 @@
+# Label definitions for this repository (name, colour, description).
+# Apply with any label-sync tool, or one by one: gh label create <name> --color <hex> --description "..." --force
+- { name: "priority:P0", color: "b60205", description: "Blocks a general release" }
+- { name: "priority:P1", color: "d93f0b", description: "Needed before 1.0" }
+- { name: "priority:P2", color: "fbca04", description: "Should be done" }
+- { name: "priority:P3", color: "c2e0c6", description: "Could be done" }
+- { name: "effort:S", color: "ededed", description: "Up to 2 days for one maintainer" }
+- { name: "effort:M", color: "ededed", description: "Up to 2 weeks for one maintainer" }
+- { name: "effort:L", color: "ededed", description: "Longer, or depends on someone else" }
+- { name: "area:security", color: "1d76db", description: "Cryptography, pairing, protocol, file safety" }
+- { name: "area:release", color: "1d76db", description: "Signing, packaging, CI, supply chain" }
+- { name: "area:testing", color: "1d76db", description: "Test suites, fuzzing, platform verification" }
+- { name: "area:platform", color: "1d76db", description: "Windows, macOS, Linux specifics" }
+- { name: "area:network", color: "1d76db", description: "NAT traversal, STUN, connectivity" }
+- { name: "area:ux", color: "1d76db", description: "Interface, accessibility, messages" }
+- { name: "area:app", color: "1d76db", description: "Application behaviour and limits" }
+- { name: "area:legal", color: "1d76db", description: "Privacy, licences, naming" }
+- { name: "area:ops", color: "1d76db", description: "Process, governance, support" }
+- { name: "decision-needed", color: "5319e7", description: "Needs an explicit project decision before work starts" }
+- { name: "security-sensitive", color: "e99695", description: "Describes a known weakness: discuss privately first" }
+- { name: "release-readiness", color: "0e8a16", description: "Part of the path to a general release" }
