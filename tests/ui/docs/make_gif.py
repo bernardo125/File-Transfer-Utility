@@ -3,7 +3,7 @@ from pathlib import Path
 from PIL import Image
 
 media = Path(__file__).resolve().parents[3] / "docs" / "media"
-frames = [("01-home", 1600), ("02-pairing", 2200), ("03-connected", 1600), ("04-incoming", 2200), ("05-transferring", 2400), ("06-received", 3000)]
+frames = [("01-home", 1600), ("02-pairing", 2200), ("03-fingerprint", 2400), ("04-connected", 1600), ("05-incoming", 2200), ("06-transferring", 2400), ("07-received", 3000)]
 imgs, durations = [], []
 for name, ms in frames:
     im = Image.open(media / f"{name}.png").convert("RGB")
