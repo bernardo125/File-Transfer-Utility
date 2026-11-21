@@ -8,6 +8,10 @@ name: release
 #
 # The binaries are NOT code-signed yet (see docs/security): Windows SmartScreen and macOS Gatekeeper
 # will warn until signing is added.
+#
+# Release type: GitHub's "latest" link (releases/latest/download/...) skips releases flagged as
+# pre-releases, so v0.x tags are published as normal releases, titled "(beta)" and described as beta
+# in the notes. Only tags with a suffix (v1.0.0-rc1, v0.2.0-beta1) are flagged as pre-releases.
 on:
   push:
     tags: ["v*"]
@@ -85,14 +89,17 @@ jobs:
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
-          # v0.x and any tag with a suffix (v1.0.0-rc1) are published as pre-releases.
+          # Only tags with a suffix (v1.0.0-rc1) are flagged as pre-releases: a pre-release is never
+          # "latest", which would break the README download links. v0.x is a normal release marked beta.
           flags=()
-          if [[ "$TAG" == v0.* || "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+          title="File Throw $TAG"
+          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+          if [[ "$TAG" == v0.* ]]; then title="$title (beta)"; fi
           # GitHub generates the change list; this text is put in front of it.
           notes=$'Direct peer-to-peer file transfer, no server in the middle.\n\n'
           notes+=$'**Read first**\n'
-          notes+=$'- Pre-release: code-reviewed, but not independently audited.\n'
+          notes+=$'- Beta (version 0.x): code-reviewed, but not independently audited. Use it with that in mind.\n'
           notes+=$'- The binaries are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper will warn about an unknown publisher.\n'
           notes+=$'- After connecting, both users must compare the pairing fingerprint and confirm it before anything can be sent.\n'
           notes+=$'- Verify the download against `SHA256SUMS.txt`. Limitations and security details: see the README and SECURITY.md.\n'
-          gh release create "$TAG" dist/* --repo "$REPO" --title "File Throw $TAG" --notes "$notes" --generate-notes "${flags[@]}"
+          gh release create "$TAG" dist/* --repo "$REPO" --title "$title" --notes "$notes" --generate-notes "${flags[@]}"

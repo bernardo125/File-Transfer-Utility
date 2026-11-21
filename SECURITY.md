@@ -24,14 +24,13 @@ Useful things to include:
 - the steps to reproduce it, or a proof of concept;
 - whether you want to be credited.
 
-Please give a reasonable time to fix the problem before you publish details. This is a small project
-maintained by one person, so the targets below are goals, not guarantees:
+**There are no fixed response or fix times.** File Throw is a free utility maintained by one person in
+their spare time, so no deadline can be promised. What you can expect: reports are read privately, serious
+problems (critical and high) are looked at first, and you are told what was decided and credited if you wish.
 
-| Step | Goal |
-|---|---|
-| Acknowledge your report | within 7 days |
-| First assessment (accepted, needs more information, or not a vulnerability) | within 14 days |
-| Fix or mitigation for a confirmed issue | depends on severity; critical and high first |
+Please give a reasonable time to fix the problem before you publish details. If you have not heard back
+after a few weeks, a polite reminder on the advisory is welcome, and you are free to disclose responsibly
+if the problem is serious and there is no sign of progress.
 
 ## Supported versions
 
@@ -55,6 +54,7 @@ upstream).
 A plain-language summary is in the [README](README.md#security-model). Details:
 
 - cryptography, keys and known limits: [`docs/security/CRYPTOGRAPHY.md`](docs/security/CRYPTOGRAPHY.md)
+- how reports are handled and how fixes are released: [`docs/security/VULNERABILITY_HANDLING.md`](docs/security/VULNERABILITY_HANDLING.md)
 - threat model: [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md)
 - audit findings and remediation status: [`docs/security/SECURITY_AUDIT.md`](docs/security/SECURITY_AUDIT.md)
 
