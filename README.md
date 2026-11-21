@@ -160,7 +160,7 @@ sequenceDiagram
     B->>B: Same for B
 
     Note over A,B: Pairing (over a channel nobody authenticates)
-    A-->>B: Token: A's public key + addresses + expiry + checksum<br/>(public data; SHA-256 checksum only catches typos)
+    A-->>B: Token: A's public key + addresses + expiry + checksum<br/>(public data, the SHA-256 checksum only catches typos)
     B-->>A: Token of B
     A->>A: Fingerprint = SHA-256(label, key A, key B), first 80 bits
     B->>B: Same value, if no key was swapped
@@ -176,7 +176,7 @@ sequenceDiagram
 
     Note over A,B: File transfer (inside the encrypted channel)
     A->>B: Offer: name, size, SHA-256 of the file
-    B->>B: Offer id = 128 random bits; user accepts that offer
+    B->>B: Offer id = 128 random bits, the user accepts that offer
     A->>B: File bytes in 64 KiB chunks
     B->>B: SHA-256 computed while writing, compared before the file appears
 ```
