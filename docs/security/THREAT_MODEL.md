@@ -116,4 +116,4 @@ Scenario outcomes (see `SECURITY_AUDIT.md` for commits and tests):
 | S14 | Peer stalls receiver | **Mitigated** (timeouts, one offer at a time); CLI control read still unbounded |
 | S15 | Resume-time bypass of pinning | **Prevented** (`VerifyConnection`) |
 
-Residual risks after Phase 2: pairing authenticity depends on the users' fingerprint comparison; no relay means some NATs cannot pair; consent UI in the renderer; no MOTW/quarantine on received files; ALPN is still the sample value; dependency vulnerability status unverified; no Windows/macOS verification; no independent penetration test.
+Residual risks after Phase 2: pairing authenticity depends on the users' fingerprint comparison; no relay means some NATs cannot pair; consent UI in the renderer; no MOTW/quarantine on received files; ALPN is still the sample value; dependency status re-checked before the first release (see `SECURITY_AUDIT.md`) but must be re-scanned for every release; no Windows/macOS verification; no independent penetration test.

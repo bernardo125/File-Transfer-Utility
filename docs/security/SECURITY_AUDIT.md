@@ -73,7 +73,11 @@ This table is the current state. "Validating tests" are the tests added or chang
 | `cd tests/ui && npx playwright test --project=chromium` | pass, 10 tests against the real backend and the built bundle |
 | `go mod verify` | all modules verified |
 
-**Not run / limitations:** Playwright `webkit` project; `netem`; `govulncheck`/`gosec`/`npm audit` (not installed / need network) — dependency vulnerability status is still **unverified**; Windows and macOS execution; a real Wails webview (CSP, native dialogs); live-network STUN/NAT scenarios.
+**Pre-release dependency scan (2026-11-21).** `govulncheck -mode=binary` on the release binaries found **29-30 known vulnerabilities** in the Go 1.26.4 builds (standard library, `x/net` 0.57.0, `x/crypto` 0.55.0), including GO-2026-4970 (`os.Root` escape via symlink plus trailing slash) which the receive path relies on. Fixed in commit `9402082` (Go 1.26.11, `x/net` 0.63.0, `x/crypto` 0.59.0); the rebuilt Linux and Windows binaries scan clean. `npm audit` reported 2 high advisories in the Vite dev server (dev dependency, not in the shipped bundle), fixed by `npm audit fix`; 0 remaining in both JS projects. `actionlint` found invalid YAML in `test.yml`, fixed. A scan of source packages alone would have missed the standard-library findings: scan the built binary.
+
+**Smoke test of the built Linux binary (CLI mode, two processes):** tokens v2 exchanged, identical fingerprint on both sides, 3 MB file received with matching SHA-256, no temporary file left.
+
+**Not run / limitations:** Playwright `webkit` project; `netem`; `gosec`; Windows and macOS execution of the built binaries (the Windows `.exe` was only compiled and scanned; the macOS build only exists in CI); a real Wails webview (CSP, native dialogs); live-network STUN/NAT scenarios.
 
 ## 2. Scope and method
 
