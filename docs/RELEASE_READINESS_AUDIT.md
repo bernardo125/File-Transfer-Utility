@@ -63,7 +63,7 @@ Rating legend: Green = meets the bar for general release; Amber = acceptable for
 A user who downloads a networked file-transfer tool from a stranger needs to be able to answer "is this really the project's file, is it current, and what happens if a flaw is found?". The criteria this audit uses for general release:
 
 1. **Authentic distribution:** signed installers on Windows and macOS, signed checksums and provenance everywhere, an SBOM.
-2. **A path for fixes:** an authenticated updater, a documented vulnerability process, a rehearsed emergency release.
+2. **A path for fixes:** an authenticated updater, a documented vulnerability process and a documented way to release a fix.
 3. **Independent assurance:** a third-party review of the cryptographic design and the file/transport layers, with no open Critical or High.
 4. **Parity across platforms:** the same automated suite green on Windows, macOS and Linux, plus manual smoke runs of the packaged app.
 5. **Honest, usable security:** the user-facing security step (fingerprint) is explained, hard to skip, or replaced by automatic authentication.
@@ -193,7 +193,7 @@ All must be true for v1.0.
 - [ ] Received files are marked as downloaded from the internet on Windows and macOS (GA-08).
 - [ ] Pairing authentication is automatic or the fingerprint step has passed a usability test (GA-02/07/36).
 - [ ] Wire format finalised: product ALPN, protocol version, legacy tokens removed (GA-04, GA-06, GA-09).
-- [ ] Vulnerability reporting enabled and a private drill completed; emergency release procedure rehearsed (GA-43, GA-45).
+- [ ] Vulnerability reporting enabled and a private drill completed; a documented procedure for releasing a fix (GA-43, GA-45).
 - [ ] Privacy notice, third-party notices and contribution files published (GA-40, GA-41, GA-44).
 - [ ] Compatibility table (NAT types, IPv6, OSes, distributions) published with test evidence (GA-25, GA-32).
 - [ ] `main` protected with required checks and CODEOWNERS for security-sensitive paths (GA-46).

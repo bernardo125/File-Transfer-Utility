@@ -17,7 +17,7 @@ First public release, **beta**: code-reviewed, not independently audited, binari
 - Per-offer consent identifiers; one offer at a time.
 - Production Content-Security-Policy; `SECURITY.md`; security audit, threat model and cryptography reference in `docs/security`.
 - Release workflow (Windows, macOS, Linux) with stable asset names and `SHA256SUMS.txt`. Versions `0.x` are published as normal releases titled "(beta)" so the `releases/latest` download links work.
-- Vulnerability handling procedure and emergency release steps (`docs/security/VULNERABILITY_HANDLING.md`).
+- Vulnerability handling procedure and steps for releasing a fix (`docs/security/VULNERABILITY_HANDLING.md`).
 
 ### Changed
 - Received files go to a private temporary file and are published only after size and SHA-256 match; an existing file is never overwritten.
