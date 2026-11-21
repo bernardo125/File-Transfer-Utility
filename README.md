@@ -128,9 +128,7 @@ Design notes (in Portuguese) with the reasoning behind each choice are in [`docs
 
 ## Security model
 
-### Security architecture at a glance
-
-Every transfer goes through five checks, in this order. Each one stops a different kind of attacker:
+Short version: the connection is encrypted and tied to your peer's key, you confirm the pairing yourself, and nothing is written to disk until you accept it and its SHA-256 matches. Every transfer goes through five checks, in this order, and each one stops a different kind of attacker:
 
 ```mermaid
 flowchart TD
@@ -147,78 +145,26 @@ flowchart TD
     X3 -. "stopped by" .-> S
 ```
 
-**Cryptography step by step**
+**What it uses.** Ed25519 identity keys (new for every session, memory only), TLS 1.3 over QUIC with a hybrid X25519 + ML-KEM-768 key exchange (negotiated between two builds of the app in our tests), and SHA-256 for file integrity. Nothing is implemented from scratch: it all comes from Go's standard library and quic-go. Step-by-step diagram and every primitive: [`docs/security/CRYPTOGRAPHY.md`](docs/security/CRYPTOGRAPHY.md).
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant A as You (A)
-    participant B as Your peer (B)
+**What it does not protect against.**
 
-    Note over A,B: Identity (each side, locally)
-    A->>A: Ed25519 key pair from crypto/rand<br/>kept in memory only, new on every session
-    B->>B: Same for B
+- If you confirm the fingerprint without really comparing it, someone who controls the channel you sent the token through could sit in the middle.
+- A peer you chose to trust can still send you a file you do not want. You accept each one, and the name and size are shown.
+- Received files are not yet marked by the OS as "downloaded from the internet", and the builds are not code-signed yet.
+- No independent audit or penetration test has been done. Findings and their status: [`docs/security`](docs/security).
 
-    Note over A,B: Pairing (over a channel nobody authenticates)
-    A-->>B: Token: A's public key + addresses + expiry + checksum<br/>(public data, the SHA-256 checksum only catches typos)
-    B-->>A: Token of B
-    A->>A: Fingerprint = SHA-256(label, key A, key B), first 80 bits
-    B->>B: Same value, if no key was swapped
-    A-->>B: Users compare the code by voice. A mismatch aborts.
-
-    Note over A,B: Encrypted channel: QUIC + TLS 1.3 (mutual)
-    A->>B: ClientHello: key shares for X25519 + ML-KEM-768 (hybrid)
-    B->>A: ServerHello + self-signed X.509 certificate holding B's Ed25519 key<br/>CertificateVerify = Ed25519 signature over the handshake
-    A->>A: Pin: certificate key must equal the key from B's token
-    A->>B: A's certificate + Ed25519 CertificateVerify (client auth is required)
-    B->>B: Same pin check against A's token
-    Note over A,B: HKDF-SHA-256 derives the traffic keys.<br/>Everything after this is AEAD-protected (AES-128-GCM negotiated in our tests)
-
-    Note over A,B: File transfer (inside the encrypted channel)
-    A->>B: Offer: name, size, SHA-256 of the file
-    B->>B: Offer id = 128 random bits, the user accepts that offer
-    A->>B: File bytes in 64 KiB chunks
-    B->>B: SHA-256 computed while writing, compared before the file appears
-```
-
-**The cryptographic building blocks**
-
-| Primitive | Implementation | Used for | Notes |
-|---|---|---|---|
-| **Ed25519** | Go `crypto/ed25519` | Your session identity: signs the TLS handshake; its public half is what your peer pins | Key from `crypto/rand`, memory only, never persisted |
-| **X25519 + ML-KEM-768** (hybrid) | Go `crypto/tls` defaults, through quic-go | Key exchange of every connection (forward secrecy) | Negotiated by two builds of this app in our test. The ML-KEM part is post-quantum; it depends on both peers' Go versions, otherwise X25519 alone is used |
-| **TLS 1.3** | Go `crypto/tls`, TLS 1.3 enforced | Mutual authentication, key schedule (HKDF-SHA-256) | No downgrade to older versions |
-| **QUIC packet protection** | quic-go (RFC 9001) | Encrypts and authenticates every packet and its header | AEAD: AES-128-GCM was negotiated in our tests (AES-256-GCM or ChaCha20-Poly1305 are also possible) |
-| **X.509, self-signed** | Go `crypto/x509` | A container for the Ed25519 key | No CA: trust comes from the pinned key, not from the certificate |
-| **SHA-256** (file) | Go `crypto/sha256` | Integrity of each file, computed while receiving | Proves the bytes arrived intact, not who produced them |
-| **SHA-256** (fingerprint) | Go `crypto/sha256` | The code both users compare | 80 bits of a hash over *both* public keys |
-| **SHA-256** (token checksum) | Go `crypto/sha256` | Detects a mistyped or truncated token | 32 bits, not a security control: anyone can recompute it |
-| **Random numbers** | Go `crypto/rand` | Key pairs, offer ids, STUN transaction ids | 128 bits for offers, 96 bits for STUN |
-| **ChaCha20** (legacy) | `golang.org/x/crypto` | Only to read old `v1` tokens | A constant key shipped in the binary: obfuscation, not secrecy. New tokens do not use it |
-
-No cryptographic primitive is implemented in this project: everything comes from Go's standard library, `golang.org/x/crypto` (legacy token only) and quic-go. Authentication is classical (Ed25519), so a future quantum computer could forge a *new* handshake, but traffic recorded today stays protected by the hybrid key exchange.
-
-**Where the trust comes from.** There is no server or certificate authority, so trust starts with *you and your peer*: the token carries the key, and the fingerprint comparison confirms nobody changed it. After that, the cryptography keeps the session private and tied to those two keys.
-
-**What it does not protect against.** A peer you chose to trust can still send you a bad file (you must accept each one, and the name and size are shown). If you confirm the fingerprint without really comparing it, an attacker on the token channel could sit in the middle. Files you receive are not yet marked by the OS as "downloaded from the internet", and the builds are not code-signed yet.
-
-Full audit, threat model and per-finding status: [`docs/security`](docs/security) (including a detailed [PlantUML diagram](docs/security/SECURITY_ARCHITECTURE.puml)).
-
-### Details
+Found a vulnerability? Please report it privately, see [`SECURITY.md`](SECURITY.md).
 
 | Property | How it is achieved |
 |---|---|
 | Confidentiality and integrity in transit | QUIC with TLS 1.3. |
-| Peer authentication, with no CA and no server | **Mutual** TLS where each side must present the Ed25519 key that was in the token it was given. A host that only knows the peer's address cannot join the session. |
-| File integrity | SHA-256 computed while receiving, compared with the hash announced in the request. The data goes to a private temporary file that only becomes the final file after size and hash are verified; a mismatch removes the temporary file and never touches a file you already had. The hash proves the bytes arrived intact, not who produced them. |
-| Hostile input | Control frames are bounded, metadata is validated (size, hash format, file name), file names are reduced to one safe component (no paths, no dotfiles, no Windows device names or stream separators, no control or bidi characters), STUN replies must answer our own request, and the token and STUN parsers return errors instead of crashing. They are fuzzed. |
-| Consent | The receiver sees name and size and must accept. A decision is bound to one specific offer (random id); a second offer is refused while one is pending, and stale or duplicate answers are rejected. |
-| Pairing | The token travels over a channel nobody authenticates, so both users must confirm the same fingerprint of both public keys before any data channel is used. The backend enforces this. |
-| Renderer trust | The UI can only send files picked in the native file dialog and can only open folders inside the download directory; the production bundle ships a Content-Security-Policy. |
-
-**What the token is, honestly:** a public identifier. It contains your addresses and your session's Ed25519 public key; it is not secret and its checksum only catches typos (anyone can recompute it). Its job is to **pin the identity** (the Ed25519 key), and the QUIC handshake enforces that. Because a token can be swapped by someone who controls the channel you send it through, the **fingerprint comparison is what authenticates the pairing**: if the two screens show different fingerprints, press *They don't match*. Tokens expire after 24 h; a new key pair is generated each time the app starts.
-
-Security audit, threat model and remediation status: [`docs/security`](docs/security).
+| Peer authentication, no CA, no server | Mutual TLS: each side must present the Ed25519 key from the token it was given, and both users confirm the pairing fingerprint before any data flows. |
+| File integrity | SHA-256 computed while receiving and compared with the announced hash. It proves the bytes arrived intact, not who produced them. |
+| Safe writing | Private temporary file, published only after size and hash match. An existing file is never overwritten (`report (1).pdf`) and a failed transfer never touches it. |
+| Hostile input | Frames are size-bounded, metadata and file names are validated (no paths, dotfiles, device names or control characters), STUN replies must answer our own request, and the parsers are fuzzed. |
+| Consent | The receiver sees name and size and must accept. A decision is bound to one specific offer, and a second offer is refused while one is pending. |
+| Renderer trust | The UI can only send files picked in the native dialog and open folders inside the download directory. The production bundle has a Content-Security-Policy. |
 
 ## Network compatibility and limitations
 
@@ -258,10 +204,10 @@ The test suite exercises the real stack (real UDP sockets, real QUIC, real hole 
 
 | Layer | Tests | What it proves | Run |
 |---|:--:|---|---|
-| Unit | 71 | framing, validation, token and STUN parsing, hashing, the UI's transfer state machine | `make test-fast`, `make test-frontend` |
-| Integration | 38 | mutual authentication, hole punch, transfer integrity at chunk boundaries, peers dying mid-transfer, the UI backend with two real instances | `make test`, `make race` |
-| End to end | 12 | the whole pipeline in Go (including lossy, reordering and duplicating networks) and the real UI in a browser, with files checked by SHA-256 on the receiver's disk | `make test-ui` |
-| Fuzzing | 4 | control frames, requests, tokens, STUN responses | `make fuzz` |
+| Unit | 71+ | framing, validation, token and STUN parsing, hashing, the UI's transfer state machine | `make test-fast`, `make test-frontend` |
+| Integration | 38+ | mutual authentication, hole punch, transfer integrity at chunk boundaries, peers dying mid-transfer, the UI backend with two real instances | `make test`, `make race` |
+| End to end | 12+ | the whole pipeline in Go (including lossy, reordering and duplicating networks) and the real UI in a browser, with files checked by SHA-256 on the receiver's disk | `make test-ui` |
+| Fuzzing | 7 | control frames, requests, tokens (both formats), STUN responses, file-name sanitising | `make fuzz` |
 | Benchmarks | 4 | framing, hashing, QUIC throughput | `make bench` |
 
 Details, environment notes and the list of what is *not* covered are in [`docs/TESTING.md`](docs/TESTING.md). The UI is also checked with axe for WCAG 2.1 A/AA, with the traceability matrix in [`docs/accessibility-traceability-matrix.md`](docs/accessibility-traceability-matrix.md).
@@ -284,7 +230,9 @@ Details, environment notes and the list of what is *not* covered are in [`docs/T
 ├── frontend/             React 19 + Vite + Tailwind UI
 ├── tests/ui/             Playwright suite (real UI + real backends) and docs media generator
 ├── docs/                 design notebook, testing guide, accessibility matrix, media
-└── assets/               logo
+│   └── security/         audit, threat model, cryptography reference, remediation status
+├── assets/               logo
+└── SECURITY.md           how to report a vulnerability, scope, supported versions
 ```
 
 ## License
