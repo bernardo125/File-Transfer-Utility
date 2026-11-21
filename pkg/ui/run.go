@@ -31,8 +31,8 @@ func RunWithAssets(assets fs.FS) {
 			B: 42,
 			A: 255,
 		},
-		OnStartup:  app.Startup,
-		OnShutdown: app.Shutdown,
+		OnStartup:  app.startup,
+		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
 		},

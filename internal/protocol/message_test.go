@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"ftu/internal/transfer"
 	"io"
 	"strings"
 	"testing"
@@ -130,7 +131,7 @@ func FuzzRequestRoundTrip(f *testing.F) {
 		out, err := DecodeRequest(got)
 		if err != nil {
 			// invalid requests must be rejected, valid ones must be preserved exactly
-			if size >= 0 && len(hash) == 64 && strings.Trim(hash, "0123456789abcdef") == "" {
+			if size >= 0 && len(hash) == 64 && strings.Trim(hash, "0123456789abcdef") == "" && transfer.ValidatePeerFileName(name) == nil {
 				t.Fatalf("valid request rejected: %v", err)
 			}
 			return
@@ -162,4 +163,22 @@ func FuzzControlFrameDecoder(f *testing.F) {
 			}
 		}
 	})
+}
+
+// Detects (F-05): control/bidi characters or oversized names reaching the consent prompt.
+func TestDecodeRequestRejectsUnsafeFileNames(t *testing.T) {
+	for name, fn := range map[string]string{
+		"empty":    "",
+		"escape":   "a\u001b[2Jb.pdf",
+		"newline":  "a\nb",
+		"bidi":     "invoice\u202egpj.exe",
+		"too long": strings.Repeat("a", 256),
+	} {
+		t.Run(name, func(t *testing.T) {
+			payload, _ := json.Marshal(Request{FileName: fn, FileSize: 1, FileHash: validHash})
+			if _, err := DecodeRequest(payload); !errors.Is(err, ErrInvalidRequest) {
+				t.Fatalf("name %q accepted (err=%v)", fn, err)
+			}
+		})
+	}
 }

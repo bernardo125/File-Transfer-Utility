@@ -4,6 +4,8 @@ import {ui} from '../models';
 
 export function CancelConnection():Promise<void>;
 
+export function ConfirmPeerFingerprint(arg1:boolean):Promise<void>;
+
 export function ConnectPeer(arg1:string):Promise<void>;
 
 export function CopyToClipboard(arg1:string):Promise<void>;
@@ -26,7 +28,7 @@ export function OpenGitHub():Promise<void>;
 
 export function QuitApplication():Promise<void>;
 
-export function RespondIncomingTransfer(arg1:boolean):Promise<void>;
+export function RespondIncomingTransfer(arg1:string,arg2:boolean):Promise<void>;
 
 export function SelectDownloadDirectory():Promise<string>;
 

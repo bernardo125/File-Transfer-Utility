@@ -2,6 +2,7 @@ package connectivity
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"errors"
 	"net"
@@ -11,6 +12,11 @@ import (
 
 const (
 	PUNCH byte = 0x01
+)
+
+const (
+	maxConsecutiveReadErrors = 50
+	readErrorBackoff         = 20 * time.Millisecond
 )
 
 var ErrSameAdress = errors.New("That's your PC token")
@@ -35,13 +41,59 @@ type HolePuncher struct {
 	otherPeerPublicKey    []byte
 	resultCh              chan HolePunchResult
 	done                  chan struct{} // closed when the punch finished; stops all probes
+	ctx                   context.Context
 }
 
 // struct that will be returned to start send chunks
 type HolePunchResult struct {
 	Addr *net.UDPAddr
-	Rtt  time.Duration
-	Err  error
+	// Candidates is the ordered list of addresses worth dialing: the address the peer's PUNCH came
+	// from first, then the token's own candidate addresses. A forged PUNCH can only ever promote a
+	// wrong address to the front; the dialer falls through to the genuine ones.
+	Candidates []*net.UDPAddr
+	Rtt        time.Duration
+	Err        error
+}
+
+// usableAddr reports whether addr is something worth probing or dialing: a unicast address with a
+// real port (token fields may be 0.0.0.0 when STUN failed, or garbage in a crafted token).
+func usableAddr(a *net.UDPAddr) bool {
+	return a != nil && a.Port != 0 && len(a.IP) > 0 && !a.IP.IsUnspecified() && !a.IP.IsMulticast()
+}
+
+// candidateAddrs returns the usable candidate addresses of the token.
+func (punch *HolePuncher) candidateAddrs() []*net.UDPAddr {
+	var out []*net.UDPAddr
+	for _, a := range []*net.UDPAddr{punch.peerLocalAddressIPV4, punch.peerRemoteAddressIPV4, punch.peerPublicAddressIPV6} {
+		if usableAddr(a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// sourceAllowed reports whether a datagram from src may be trusted as coming from the peer. The
+// PUNCH payload only carries the peer's PUBLIC key, which anyone holding the token (or watching a
+// probe) knows, so the source address is checked against the token as well: an off-path sender
+// outside the token's addresses cannot steer the connection.
+func (punch *HolePuncher) sourceAllowed(src *net.UDPAddr) bool {
+	for _, c := range punch.candidateAddrs() {
+		if c.IP.Equal(src.IP) {
+			return true
+		}
+	}
+	return false
+}
+
+// dialCandidates builds the ordered dial list for a verified first source.
+func (punch *HolePuncher) dialCandidates(first *net.UDPAddr) []*net.UDPAddr {
+	out := []*net.UDPAddr{first}
+	for _, c := range punch.candidateAddrs() {
+		if !(c.IP.Equal(first.IP) && c.Port == first.Port) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func getDefaultConfig() (config HolePunchConfig) {
@@ -49,15 +101,26 @@ func getDefaultConfig() (config HolePunchConfig) {
 }
 
 func UDPHolePunch(conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
-	return udpHolePunch(getDefaultConfig(), conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
+	return udpHolePunchCtx(context.Background(), getDefaultConfig(), conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
+}
+
+// UDPHolePunchContext is UDPHolePunch that stops promptly when ctx is cancelled: the verdict
+// channel then receives ctx.Err(), the probes stop and the socket is released for the next user
+// (no read deadline tricks from the outside are needed).
+func UDPHolePunchContext(ctx context.Context, conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
+	return udpHolePunchCtx(ctx, getDefaultConfig(), conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
 }
 
 // udpHolePunch is UDPHolePunch with an injectable configuration (lets tests use short timeouts).
 func udpHolePunch(defaultConfig HolePunchConfig, conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
+	return udpHolePunchCtx(context.Background(), defaultConfig, conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, privateKey, otherPeerPublicKey)
+}
+
+func udpHolePunchCtx(ctx context.Context, defaultConfig HolePunchConfig, conn *net.UDPConn, peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, privateKey *ed25519.PrivateKey, otherPeerPublicKey *ed25519.PublicKey) <-chan HolePunchResult {
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 	punch := &HolePuncher{socket: conn, config: defaultConfig,
 		peerLocalAddressIPV4: peerLocalIPV4, peerRemoteAddressIPV4: peerRemoteIPV4, peerPublicAddressIPV6: peerPublicIPV6,
-		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult, 1), done: make(chan struct{})}
+		otherPeerPublicKey: *otherPeerPublicKey, myPublicKey: publicKey, resultCh: make(chan HolePunchResult, 1), done: make(chan struct{}), ctx: ctx}
 
 	// test if is the same address
 	if isMyOwnPC(&punch.myPublicKey, &punch.otherPeerPublicKey) {
@@ -89,7 +152,7 @@ func (punch *HolePuncher) probe(addr *net.UDPAddr, myPublicKey []byte) {
 	probeMessage := make([]byte, 33)
 	probeMessage[0] = PUNCH
 	copy(probeMessage[1:33], myPublicKey)
-	if addr == nil {
+	if !usableAddr(addr) {
 		return
 	}
 	ticker := time.NewTicker(punch.config.ProbeInterval)
@@ -111,9 +174,29 @@ func (punch *HolePuncher) listenPeer() {
 	defer punch.socket.SetReadDeadline(time.Time{}) // socket without time out to QUIC
 	buffer := make([]byte, 256)
 
+	// ONE absolute deadline for the whole attempt. Re-arming a fresh timeout after every datagram
+	// would let anyone who can reach the port keep the attempt alive forever with junk packets.
+	// It is set once (not per read) so that a cancellation, which forces the deadline to "now",
+	// cannot be overwritten by the loop.
+	punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
+	readErrors := 0
+
+	// Cancellation: unblock the pending read; the verdict below reports ctx.Err().
+	go func() {
+		select {
+		case <-punch.ctx.Done():
+			punch.socket.SetReadDeadline(time.Now())
+		case <-punch.done:
+		}
+	}()
+
 	for {
-		punch.socket.SetReadDeadline(time.Now().Add(punch.config.Timeout))
 		n, addr, err := punch.socket.ReadFromUDP(buffer)
+
+		if punch.ctx.Err() != nil {
+			punch.resultCh <- HolePunchResult{Addr: nil, Err: punch.ctx.Err()}
+			return
+		}
 
 		// if error type is timeout, a null address will be returned to the channel
 		if err != nil && os.IsTimeout(err) {
@@ -126,6 +209,17 @@ func (punch *HolePuncher) listenPeer() {
 			punch.resultCh <- HolePunchResult{Addr: nil, Err: err}
 			return
 		}
+		// any other read error: back off, and give up if it persists instead of spinning hot
+		if err != nil {
+			readErrors++
+			if readErrors > maxConsecutiveReadErrors {
+				punch.resultCh <- HolePunchResult{Addr: nil, Err: err}
+				return
+			}
+			time.Sleep(readErrorBackoff)
+			continue
+		}
+		readErrors = 0
 		msg := buffer[:n]
 
 		//otherwise continue looping
@@ -134,9 +228,9 @@ func (punch *HolePuncher) listenPeer() {
 		}
 		isExpectedToken := bytes.Equal(msg[1:33], punch.otherPeerPublicKey)
 
-		if isExpectedToken {
+		if isExpectedToken && punch.sourceAllowed(addr) {
 			punch.socket.SetDeadline(time.Time{}) //clean deadline
-			punch.resultCh <- HolePunchResult{Addr: addr, Err: nil}
+			punch.resultCh <- HolePunchResult{Addr: addr, Candidates: punch.dialCandidates(addr), Err: nil}
 			return
 
 		}

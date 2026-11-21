@@ -1,4 +1,4 @@
-import { test, expect, pair } from '../fixtures/peers';
+import { test, expect, pair, confirmFingerprints } from '../fixtures/peers';
 
 test('pasting garbage as the peer token is rejected by the real backend and nothing hangs', async ({ alice }) => {
   await alice.startAs('send');
@@ -24,5 +24,18 @@ test('a token pasted from a chat, with stray spaces and a trailing newline, stil
   await alice.pairing.peerTokenInput.fill(`  ${tokenB}  \n`);
   await bob.pairing.peerTokenInput.fill(`\n${tokenA} `);
   await Promise.all([alice.pairing.connectButton.click(), bob.pairing.connectButton.click()]);
+  await confirmFingerprints(alice, bob);
   await Promise.all([expect(alice.transfer.connection).toContainText('Connected'), expect(bob.transfer.connection).toContainText('Connected')]);
+});
+
+test('refusing the fingerprint ends the pairing and no file can be sent', async ({ alice, bob }) => {
+  await Promise.all([alice.startAs('send'), bob.startAs('receive')]);
+  const [tokenA, tokenB] = [await alice.token(), await bob.token()];
+  await alice.pairing.peerTokenInput.fill(tokenB);
+  await bob.pairing.peerTokenInput.fill(tokenA);
+  await Promise.all([alice.pairing.connectButton.click(), bob.pairing.connectButton.click()]);
+  await expect(alice.pairing.fingerprint).toBeVisible();
+  await alice.pairing.mismatchButton.click();
+  await expect(alice.pairing.error).toContainText(/did not match/i);
+  await expect(alice.pairing.connectButton).toBeVisible(); // back on the token form, no transfer screen
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Download, Send } from 'lucide-react';
-import { CancelConnection, ConnectPeer, GetLocalToken } from '../wailsjs/go/ui/App';
+import { CancelConnection, ConfirmPeerFingerprint, ConnectPeer, GetLocalToken } from '../wailsjs/go/ui/App';
 import { useSession } from '../context/SessionContext';
 import { useCountdown } from '../hooks/useCountdown';
 import { errorMessage } from '../lib/wails';
@@ -11,6 +11,7 @@ import { Notice } from '../components/ui/Notice';
 import { PairingVisual } from '../components/pairing/PairingVisual';
 import { TokenPanel } from '../components/pairing/TokenPanel';
 import { ConnectingPanel } from '../components/pairing/ConnectingPanel';
+import { FingerprintPanel } from '../components/pairing/FingerprintPanel';
 import type { PeerRole } from '../types/navigation';
 
 const CONNECT_TIMEOUT_S = 30;
@@ -28,6 +29,7 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
   const [remoteToken, setRemoteToken] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const { remaining, start: startTimeout, stop: stopTimeout } = useCountdown(CONNECT_TIMEOUT_S, () => {
     setIsConnecting(false);
@@ -50,6 +52,13 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
   const failedReason = isConnecting && connectionFailed ? connectionFailed.reason || 'The connection failed.' : null;
   const connecting = isConnecting && !failedReason;
   const shownError = error ?? failedReason;
+
+  const awaitingConfirmation = connecting && connection.state === 'awaiting_confirmation' && !!connection.fingerprint;
+
+  // While the user compares fingerprints the connect countdown must not cancel the pairing.
+  useEffect(() => {
+    if (awaitingConfirmation) stopTimeout();
+  }, [awaitingConfirmation, stopTimeout]);
 
   useEffect(() => {
     if (!isConnecting) return;
@@ -83,6 +92,17 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
     }
   };
 
+  const handleConfirm = async (match: boolean) => {
+    setIsConfirming(true);
+    try {
+      await ConfirmPeerFingerprint(match);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
   const handleCancel = () => {
     stopTimeout();
     setIsConnecting(false);
@@ -108,10 +128,10 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
       />
       <main className="flex flex-1 items-center justify-center overflow-y-auto px-6 pb-16 pt-14">
         <h1 className="sr-only">Pair with your peer — {role === 'send' ? 'sending a file' : 'receiving a file'}</h1>
-        <Panel title={connecting ? 'Connecting to peer' : 'Pair with your peer'} className="w-full max-w-3xl">
+        <Panel title={awaitingConfirmation ? 'Confirm your peer' : connecting ? 'Connecting to peer' : 'Pair with your peer'} className="w-full max-w-3xl">
           <div className="grid items-center gap-6 md:grid-cols-[220px_1fr]">
           <div className="flex flex-col items-center gap-3 p-5 pr-0 text-center max-md:pr-5">
-            <PairingVisual countdown={connecting ? { remaining, total: CONNECT_TIMEOUT_S } : undefined} />
+            <PairingVisual countdown={connecting && !awaitingConfirmation ? { remaining, total: CONNECT_TIMEOUT_S } : undefined} />
             <p className="max-w-[200px] text-[0.6875rem] text-dim">
               Tokens are exchanged by you, not by a server. Both peers connect directly.
             </p>
@@ -123,7 +143,15 @@ export function PairingScreen({ role, onBack, onConnected }: PairingScreenProps)
                 {shownError}
               </Notice>
             )}
-            {connecting ? (
+            {awaitingConfirmation ? (
+              <FingerprintPanel
+                fingerprint={connection.fingerprint ?? ''}
+                detail={connection.detail}
+                busy={isConfirming}
+                onMatch={() => handleConfirm(true)}
+                onMismatch={() => handleConfirm(false)}
+              />
+            ) : connecting ? (
               <ConnectingPanel state={connection.state} detail={connection.detail} onCancel={handleCancel} />
             ) : (
               <TokenPanel

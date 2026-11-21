@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, makeFile } from '../fixtures/peers';
+import { test, expect, makeFile, confirmFingerprints } from '../fixtures/peers';
 
 const out = (name: string) => fileURLToPath(new URL(`../../../docs/media/${name}.png`, import.meta.url));
 
@@ -43,20 +43,23 @@ test('capture the happy path for the README', async ({ alice, bob, workDir }) =>
   await shotWithCursor(alice.page, alice.pairing.connectButton, out('02-pairing'));
 
   await Promise.all([alice.pairing.connectButton.click(), bob.pairing.connectButton.click()]);
+  await Promise.all([expect(alice.pairing.fingerprint).toBeVisible(), expect(bob.pairing.fingerprint).toBeVisible()]);
+  await shotWithCursor(alice.page, alice.pairing.matchButton, out('03-fingerprint'));
+  await confirmFingerprints(alice, bob);
   await Promise.all([expect(alice.transfer.connection).toContainText('Connected'), expect(bob.transfer.connection).toContainText('Connected')]);
-  await shotWithCursor(alice.page, alice.transfer.chooseFile, out('03-connected'));
+  await shotWithCursor(alice.page, alice.transfer.chooseFile, out('04-connected'));
 
   await alice.willPick(file.path);
   await alice.transfer.chooseFile.click();
   await expect(bob.transfer.accept).toBeVisible();
-  await shotWithCursor(bob.page, bob.transfer.accept, out('04-incoming'));
+  await shotWithCursor(bob.page, bob.transfer.accept, out('05-incoming'));
 
   await bob.transfer.accept.click();
   await expect.poll(async () => Number(await bob.transfer.progress.getAttribute('aria-valuenow')), { timeout: 60_000 }).toBeGreaterThanOrEqual(40);
-  await shotWithCursor(bob.page, bob.transfer.cell('holiday-photos.zip'), out('05-transferring'), [0.1, 0.7]);
+  await shotWithCursor(bob.page, bob.transfer.cell('holiday-photos.zip'), out('06-transferring'), [0.1, 0.7]);
 
   await expect(bob.transfer.headline).toHaveText('File received', { timeout: 90_000 });
   await expect(alice.transfer.headline).toHaveText('Delivered');
-  await shotWithCursor(bob.page, bob.transfer.showInFolder, out('06-received'));
+  await shotWithCursor(bob.page, bob.transfer.showInFolder, out('07-received'));
 });
 

@@ -3,6 +3,9 @@ package ui
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -10,6 +13,7 @@ import (
 	"os/user"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,22 +29,48 @@ import (
 
 // App is the central Wails application struct handling IPC bindings and state.
 type App struct {
-	ctx                context.Context
-	mu                 sync.Mutex
-	conn               *net.UDPConn
-	myToken            string
-	myPrivKey          ed25519.PrivateKey
-	peerPubKey         *ed25519.PublicKey
-	quicConn           *quic.Conn
-	downloadDir        string
-	incomingDecisionCh chan bool
-	offerPending       bool // true only while an offer waits for the user's decision (guarded by mu)
-	cancelConnect      context.CancelFunc
-	connectMu          sync.Mutex
-	emitter            func(event string, data ...any) // nil in production: events go through the Wails runtime
+	ctx        context.Context
+	mu         sync.Mutex
+	conn       *net.UDPConn
+	myToken    string
+	myPrivKey  ed25519.PrivateKey
+	peerPubKey *ed25519.PublicKey
+	quicConn   *quic.Conn
+	// Pairing gate (F-03): the QUIC session exists after the handshake, but no stream is accepted
+	// and no file can be sent until BOTH users have compared the fingerprint and this side's user
+	// confirmed it. Guarded by mu.
+	awaitingConfirm bool
+	confirmed       bool
+	pendingAddr     string
+	pendingRttMs    int64
+	// sendable holds the files the user picked in the native dialog. The renderer is not trusted
+	// to name arbitrary paths: InspectFile/SendSelectedFile/OpenFolder only act on these.
+	sendable      []string
+	downloadDir   string
+	offer         *pendingOffer // the single offer waiting for the user's decision (guarded by mu)
+	receiving     bool          // true while an accepted offer is being received (guarded by mu)
+	cancelConnect context.CancelFunc
+	connectDone   chan struct{} // closed when the latest connect goroutine has fully finished
+	connectMu     sync.Mutex
+	emitter       func(event string, data ...any) // nil in production: events go through the Wails runtime
 }
 
 // NewApp creates a new App instance.
+// pendingOffer is one incoming transfer request waiting for the user.
+type pendingOffer struct {
+	id       string
+	decision chan bool // cap 1; written at most once
+	decided  bool      // guarded by App.mu
+}
+
+func newOfferID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
 func NewApp() *App {
 	downloadDir := ""
 	if usr, err := user.Current(); err == nil {
@@ -55,21 +85,22 @@ func NewApp() *App {
 	}
 
 	return &App{
-		downloadDir:        downloadDir,
-		incomingDecisionCh: make(chan bool, 1),
+		downloadDir: downloadDir,
 	}
 }
 
-// Startup is invoked by Wails when the runtime is ready.
-func (a *App) Startup(ctx context.Context) {
+// startup is invoked by Wails when the runtime is ready. It is unexported on purpose: Wails binds
+// every exported method of the bound struct, i.e. makes it callable from the renderer.
+func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// Shutdown is invoked by Wails when the application is closing.
-func (a *App) Shutdown(ctx context.Context) {
+// shutdown is invoked by Wails when the application is closing (unexported, see startup).
+func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	a.awaitingConfirm, a.confirmed = false, false
 	if a.quicConn != nil {
 		_ = a.quicConn.CloseWithError(0, "Application shutdown")
 		a.quicConn = nil
@@ -94,7 +125,11 @@ func (a *App) GetMyToken() (string, error) {
 		Detail: "Resolving STUN and preparing local keys...",
 	})
 
-	conn := transport.InitializeUDPSocket()
+	conn, err := transport.ListenUDPSocket()
+	if err != nil {
+		a.emit(EventConnectionState, ConnectionStateDTO{State: "error", Detail: err.Error()})
+		return "", err
+	}
 	token, privKey := discovery.CreateKey(conn)
 
 	a.conn = conn
@@ -123,14 +158,6 @@ func (a *App) CancelConnection() error {
 	}
 	a.connectMu.Unlock()
 
-	a.mu.Lock()
-	if a.conn != nil {
-		_ = a.conn.SetReadDeadline(time.Now())
-		time.Sleep(20 * time.Millisecond)
-		_ = a.conn.SetReadDeadline(time.Time{})
-	}
-	a.mu.Unlock()
-
 	a.emit(EventConnectionFailed, ConnectionFailedDTO{
 		Reason: "Ligação cancelada pelo utilizador",
 	})
@@ -158,6 +185,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 	privKey := a.myPrivKey
 	a.mu.Unlock()
 
+	peerToken = discovery.CleanToken(peerToken)
 	if len(peerToken) <= 12 {
 		return fmt.Errorf("invalid token length: must be longer than 12 characters")
 	}
@@ -168,6 +196,12 @@ func (a *App) ConnectPeer(peerToken string) error {
 		a.cancelConnect()
 	}
 	a.cancelConnect = cancel
+	a.mu.Lock()
+	a.awaitingConfirm, a.confirmed = false, false
+	a.mu.Unlock()
+	prevDone := a.connectDone // the superseded attempt (cancelled above) must finish first
+	done := make(chan struct{})
+	a.connectDone = done
 	a.connectMu.Unlock()
 
 	a.emit(EventConnectionState, ConnectionStateDTO{
@@ -176,7 +210,11 @@ func (a *App) ConnectPeer(peerToken string) error {
 	})
 
 	go func() {
-		peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, peerPubKey, err := discovery.GetPeer(peerToken)
+		defer close(done)
+		if prevDone != nil {
+			<-prevDone
+		}
+		tok, err := discovery.ParseToken(peerToken, time.Now())
 		if err != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Token inválido: %v", err),
@@ -188,20 +226,23 @@ func (a *App) ConnectPeer(peerToken string) error {
 			return
 		}
 
+		peerPubKey := &tok.PublicKey
+		peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6 := tok.Local, tok.Stun, tok.IPv6
 		a.mu.Lock()
 		a.peerPubKey = peerPubKey
 		a.mu.Unlock()
 
-		punchCh := connectivity.UDPHolePunch(conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, &privKey, peerPubKey)
+		punchCh := connectivity.UDPHolePunchContext(ctx, conn, peerLocalIPV4, peerRemoteIPV4, peerPublicIPV6, &privKey, peerPubKey)
 
 		var punchResult connectivity.HolePunchResult
-		select {
-		case <-ctx.Done():
+		// The punch stops by itself when ctx is cancelled; waiting for its verdict guarantees the
+		// socket has no reader left before a new attempt can start.
+		punchResult = <-punchCh
+		if ctx.Err() != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: "Ligação cancelada pelo utilizador",
 			})
 			return
-		case punchResult = <-punchCh:
 		}
 
 		if punchResult.Err != nil {
@@ -221,7 +262,7 @@ func (a *App) ConnectPeer(peerToken string) error {
 			RttMs:  punchResult.Rtt.Milliseconds(),
 		})
 
-		quicConn, err := transport.QuicUpgrade(conn, punchResult.Addr, &privKey, peerPubKey)
+		quicConn, err := transport.QuicUpgradeCandidates(ctx, conn, punchResult.Candidates, &privKey, peerPubKey)
 		if err != nil {
 			a.emit(EventConnectionFailed, ConnectionFailedDTO{
 				Reason: fmt.Sprintf("Falha no upgrade QUIC: %v", err),
@@ -233,32 +274,103 @@ func (a *App) ConnectPeer(peerToken string) error {
 			return
 		}
 
+		// A newer ConnectPeer/CancelConnection/Disconnect may have superseded this attempt.
 		a.mu.Lock()
+		if ctx.Err() != nil {
+			a.mu.Unlock()
+			_ = quicConn.CloseWithError(0, "connection attempt superseded")
+			return
+		}
+		if a.quicConn != nil {
+			_ = a.quicConn.CloseWithError(0, "replaced by a new connection")
+		}
 		a.quicConn = quicConn
 		a.mu.Unlock()
 
-		a.emit(EventConnectionSuccess, ConnectionSuccessDTO{
-			Addr:  punchResult.Addr.String(),
-			RttMs: punchResult.Rtt.Milliseconds(),
-		})
+		// The session is up but NOT trusted yet: both users must compare this fingerprint (it covers
+		// both identity keys) and confirm. Until then no stream is accepted and nothing is sent.
+		fingerprint := discovery.PairingFingerprint(privKey.Public().(ed25519.PublicKey), *peerPubKey)
+		a.mu.Lock()
+		a.awaitingConfirm = true
+		a.confirmed = false
+		a.pendingAddr = quicConn.RemoteAddr().String()
+		a.pendingRttMs = punchResult.Rtt.Milliseconds()
+		a.mu.Unlock()
 
+		detail := "Compare the fingerprint with your peer (by voice or another channel) and confirm only if it is identical."
+		if tok.Version < 2 {
+			detail += " Your peer uses an older app version (legacy token): the comparison is the only protection."
+		}
 		a.emit(EventConnectionState, ConnectionStateDTO{
-			State:  "connected",
-			Detail: fmt.Sprintf("Conectado a %s", punchResult.Addr.String()),
-			RttMs:  punchResult.Rtt.Milliseconds(),
+			State:       "awaiting_confirmation",
+			Detail:      detail,
+			RttMs:       punchResult.Rtt.Milliseconds(),
+			Fingerprint: fingerprint,
 		})
 
-		go a.startReceiverLoop()
+		// If the peer vanishes while the user is still comparing, say so.
+		go func() {
+			<-quicConn.Context().Done()
+			a.mu.Lock()
+			waiting := a.awaitingConfirm && a.quicConn == quicConn
+			if waiting {
+				a.awaitingConfirm = false
+				a.quicConn = nil
+			}
+			a.mu.Unlock()
+			if waiting {
+				a.emit(EventConnectionFailed, ConnectionFailedDTO{Reason: "The peer disconnected before the pairing was confirmed"})
+				a.emit(EventConnectionState, ConnectionStateDTO{State: "error", Detail: "Peer disconnected"})
+			}
+		}()
 	}()
 
 	return nil
 }
 
+// ConfirmPeerFingerprint records the user's verdict on the pairing fingerprint. Only a "match"
+// opens the data channel (events, receiving and sending); a mismatch tears the session down. The
+// backend enforces this: the renderer cannot skip the step, because SendSelectedFile and the
+// stream acceptor both check the state set here.
+func (a *App) ConfirmPeerFingerprint(match bool) error {
+	a.mu.Lock()
+	if !a.awaitingConfirm || a.quicConn == nil {
+		a.mu.Unlock()
+		return fmt.Errorf("no pairing is waiting for confirmation")
+	}
+	a.awaitingConfirm = false
+	if !match {
+		conn := a.quicConn
+		a.quicConn = nil
+		a.mu.Unlock()
+		_ = conn.CloseWithError(0, "pairing refused by the user")
+		a.emit(EventConnectionFailed, ConnectionFailedDTO{Reason: "Pairing refused: the fingerprints did not match. Do not share files with this peer; create new tokens and try again."})
+		a.emit(EventConnectionState, ConnectionStateDTO{State: "error", Detail: "Pairing refused: fingerprints did not match"})
+		return nil
+	}
+	a.confirmed = true
+	addr, rtt := a.pendingAddr, a.pendingRttMs
+	a.mu.Unlock()
+
+	a.emit(EventConnectionSuccess, ConnectionSuccessDTO{Addr: addr, RttMs: rtt})
+	a.emit(EventConnectionState, ConnectionStateDTO{State: "connected", Detail: fmt.Sprintf("Conectado a %s", addr), RttMs: rtt})
+	go a.startReceiverLoop()
+	return nil
+}
+
 // Disconnect cleanly shuts down the active connection and socket.
 func (a *App) Disconnect() error {
+	a.connectMu.Lock()
+	if a.cancelConnect != nil {
+		a.cancelConnect()
+		a.cancelConnect = nil
+	}
+	a.connectMu.Unlock()
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	a.awaitingConfirm, a.confirmed = false, false
 	if a.quicConn != nil {
 		_ = a.quicConn.CloseWithError(0, "Disconnected by user")
 		a.quicConn = nil
@@ -285,11 +397,60 @@ func (a *App) SelectFileNative() (*FileInfoDTO, error) {
 		return nil, err
 	}
 
+	a.allowSendPath(filePath)
 	return a.InspectFile(filePath)
 }
 
-// InspectFile inspects a file path and calculates its SHA256 checksum and metadata.
+const maxSendablePaths = 64
+
+// canonicalPath returns an absolute, cleaned path ("" if it cannot be made absolute).
+func canonicalPath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return ""
+	}
+	return filepath.Clean(abs)
+}
+
+// allowSendPath remembers a path the user selected through a native dialog.
+func (a *App) allowSendPath(p string) {
+	c := canonicalPath(p)
+	if c == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, existing := range a.sendable {
+		if existing == c {
+			return
+		}
+	}
+	if len(a.sendable) >= maxSendablePaths {
+		a.sendable = a.sendable[1:]
+	}
+	a.sendable = append(a.sendable, c)
+}
+
+func (a *App) isSendable(p string) bool {
+	c := canonicalPath(p)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, existing := range a.sendable {
+		if c != "" && existing == c {
+			return true
+		}
+	}
+	return false
+}
+
+var errPathNotSelected = fmt.Errorf("that file was not selected through the file dialog")
+
+// InspectFile inspects a file the user picked in the native dialog and calculates its SHA256
+// checksum and metadata. Any other path is refused.
 func (a *App) InspectFile(filePath string) (*FileInfoDTO, error) {
+	if !a.isSendable(filePath) {
+		return nil, errPathNotSelected
+	}
 	file, stats, hash, err := transfer.SelectFileToSend(filePath)
 	if err != nil {
 		return nil, err
@@ -329,12 +490,19 @@ func (a *App) GetDownloadDirectory() string {
 
 // SendSelectedFile sends the selected file to the connected peer over QUIC.
 func (a *App) SendSelectedFile(filePath string) error {
+	if !a.isSendable(filePath) {
+		return errPathNotSelected
+	}
 	a.mu.Lock()
 	conn := a.quicConn
+	confirmed := a.confirmed
 	a.mu.Unlock()
 
 	if conn == nil {
 		return fmt.Errorf("no active peer connection")
+	}
+	if !confirmed {
+		return fmt.Errorf("the pairing fingerprint has not been confirmed")
 	}
 
 	file, stats, hash, err := transfer.SelectFileToSend(filePath)
@@ -426,40 +594,75 @@ func (a *App) SendSelectedFile(filePath string) error {
 	return nil
 }
 
-// RespondIncomingTransfer signals the receiver loop whether to accept or reject an incoming file.
-func (a *App) RespondIncomingTransfer(accept bool) error {
+// RespondIncomingTransfer records the user's decision for ONE specific offer. offerID is the
+// identifier the backend put in the transfer:incoming event: a decision for any other (stale,
+// unknown or already answered) offer is refused, so a late or duplicated click can never approve a
+// file the user did not see.
+func (a *App) RespondIncomingTransfer(offerID string, accept bool) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// A decision is only valid for an offer the user has actually been shown. Without this check an
-	// early "accept" would stay in the channel and silently approve the next file that arrives.
-	if !a.offerPending {
-		return fmt.Errorf("no pending incoming transfer to respond to")
+	o := a.offer
+	if o == nil || o.decided || subtle.ConstantTimeCompare([]byte(o.id), []byte(offerID)) != 1 {
+		return fmt.Errorf("no pending incoming transfer with that id")
 	}
-	select {
-	case a.incomingDecisionCh <- accept:
-		a.offerPending = false
-		return nil
+	o.decided = true
+	o.decision <- accept // buffered (cap 1) and written once, never blocks
+	return nil
+}
+
+// OpenFolder opens, in the native file manager, the folder of a file the app itself produced or
+// consumed: something inside the download directory, or next to a file the user selected to send.
+// Anything else (URLs, URI schemes, relative or non-existent paths, other directories) is refused,
+// so a compromised renderer cannot use it to launch arbitrary handlers.
+func (a *App) OpenFolder(path string) error {
+	target, err := a.openableFolder(path)
+	if err != nil {
+		return err
+	}
+	switch goruntime.GOOS {
+	case "windows":
+		return exec.Command("explorer", target).Start()
+	case "darwin":
+		return exec.Command("open", target).Start()
 	default:
-		return fmt.Errorf("no pending incoming transfer to respond to")
+		return exec.Command("xdg-open", target).Start()
 	}
 }
 
-// OpenFolder opens the containing folder of a file or a directory in the native file manager.
-func (a *App) OpenFolder(path string) error {
-	info, err := os.Stat(path)
-	targetDir := path
-	if err == nil && !info.IsDir() {
-		targetDir = filepath.Dir(path)
+// openableFolder validates path and returns the absolute, symlink-resolved directory to open.
+func (a *App) openableFolder(path string) (string, error) {
+	if path == "" || !filepath.IsAbs(path) {
+		return "", fmt.Errorf("refusing to open %q: not an absolute local path", path)
+	}
+	resolved, err := filepath.EvalSymlinks(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("refusing to open %q: %w", path, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	dir := resolved
+	if !info.IsDir() {
+		dir = filepath.Dir(resolved)
 	}
 
-	switch goruntime.GOOS {
-	case "windows":
-		return exec.Command("explorer", targetDir).Start()
-	case "darwin":
-		return exec.Command("open", targetDir).Start()
-	default:
-		return exec.Command("xdg-open", targetDir).Start()
+	a.mu.Lock()
+	roots := []string{a.downloadDir}
+	for _, p := range a.sendable {
+		roots = append(roots, filepath.Dir(p))
 	}
+	a.mu.Unlock()
+	for _, root := range roots {
+		r, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			continue
+		}
+		if rel, err := filepath.Rel(r, dir); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("refusing to open %q: outside the download folder and the selected files", path)
 }
 
 // CopyToClipboard copies text to the native clipboard.

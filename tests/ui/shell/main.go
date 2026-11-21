@@ -44,12 +44,12 @@ func (s *shell) newApp(dir string) {
 	old := s.app
 	s.mu.Unlock()
 	if old != nil {
-		old.Shutdown(nil) // closes the QUIC session and the UDP socket, like quitting the app
+		ui.HeadlessShutdown(old) // closes the QUIC session and the UDP socket, like quitting the app
 	}
 	app := ui.NewApp()
-	app.SetEventEmitter(s.broadcast)
+	ui.HeadlessSetEventEmitter(app, s.broadcast)
 	if dir != "" {
-		app.SetDownloadDirectory(dir)
+		ui.HeadlessSetDownloadDirectory(app, dir)
 	}
 	s.mu.Lock()
 	s.app, s.picks, s.opened, s.clipboard, s.dlDir = app, nil, nil, "", dir
@@ -127,7 +127,7 @@ func (s *shell) rpc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m := reflect.ValueOf(app).MethodByName(method)
-	if !m.IsValid() || method == "Startup" || method == "Shutdown" {
+	if !m.IsValid() {
 		writeJSON(w, rpcResult{Error: "unknown method " + method})
 		return
 	}
@@ -171,7 +171,8 @@ func (s *shell) native(app *ui.App, method string, raw []json.RawMessage) (any, 
 		path := s.picks[0]
 		s.picks = s.picks[1:]
 		s.mu.Unlock()
-		info, err := app.InspectFile(path) // real hashing and stat
+		ui.HeadlessAllowSendPath(app, path) // what the native dialog would have granted
+		info, err := app.InspectFile(path)  // real hashing and stat
 		s.mu.Lock()
 		return info, true, err
 	case "SelectDownloadDirectory":

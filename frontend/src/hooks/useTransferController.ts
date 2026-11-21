@@ -76,15 +76,20 @@ export function useTransferController(role: PeerRole) {
   }, [startOver]);
 
   const respond = useCallback(async (accept: boolean) => {
+    const offerId = (incomingTransfer ?? lastOffer)?.offerId;
+    if (!offerId) {
+      setLocalError('This offer is no longer pending.');
+      return;
+    }
     setIsResponding(true);
     try {
-      await RespondIncomingTransfer(accept);
+      await RespondIncomingTransfer(offerId, accept);
     } catch (err) {
       setLocalError(errorMessage(err));
     } finally {
       setIsResponding(false);
     }
-  }, []);
+  }, [incomingTransfer, lastOffer]);
 
   const disconnect = useCallback(async () => {
     try {

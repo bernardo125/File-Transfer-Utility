@@ -18,6 +18,7 @@ export type ConnectionState =
   | 'ready'
   | 'hole_punching'
   | 'upgrading'
+  | 'awaiting_confirmation'
   | 'connected'
   | 'error';
 
@@ -25,6 +26,8 @@ export interface ConnectionStateEvent {
   state: ConnectionState;
   detail: string;
   rttMs?: number;
+  /** Pairing fingerprint to compare with the peer; only with 'awaiting_confirmation'. */
+  fingerprint?: string;
 }
 
 export interface ConnectionSuccessEvent {
@@ -45,6 +48,8 @@ export interface FileMetadata {
 }
 
 export interface IncomingTransfer {
+  /** Identifier the backend expects back with the user's decision. */
+  offerId: string;
   fileName: string;
   fileSize: number;
   fileHash: string;

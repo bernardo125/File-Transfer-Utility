@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"context"
+	"crypto/ed25519"
+	"fmt"
 	"os"
 
 	"ftu/internal/connectivity"
@@ -53,12 +56,22 @@ func Run() {
 
 	info.PrintConnectingQUIC()
 	// Conecta ao endereço validado pelo Hole Punch (punchResult.Addr)
-	quicConn, err := transport.QuicUpgrade(conn, punchResult.Addr, &myPrivKey, peerPubKey)
+	quicConn, err := transport.QuicUpgradeCandidates(context.Background(), conn, punchResult.Candidates, &myPrivKey, peerPubKey)
 	if err != nil {
 		clierr.PrintConnectionError(err)
 		os.Exit(1)
 	}
 	defer quicConn.CloseWithError(0, "Conexão terminada")
+
+	// The session is encrypted and key-pinned, but the pinned key came from a token that travelled
+	// over a channel nobody authenticated: the users must confirm they see the same fingerprint.
+	fingerprint := discovery.PairingFingerprint(myPrivKey.Public().(ed25519.PublicKey), *peerPubKey)
+	confirmed, err := input.AskConfirmFingerprint(reader, fingerprint)
+	if err != nil || !confirmed {
+		quicConn.CloseWithError(0, "pairing refused")
+		fmt.Println("Pairing not confirmed: connection closed. Do not share files with this peer; create new tokens and try again.")
+		os.Exit(1)
+	}
 
 	info.PrintConnectionSuccess()
 

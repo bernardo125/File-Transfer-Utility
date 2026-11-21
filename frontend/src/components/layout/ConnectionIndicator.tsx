@@ -6,6 +6,7 @@ const LABELS: Record<ConnectionState, string> = {
   ready: 'Ready to pair',
   hole_punching: 'Reaching peer',
   upgrading: 'Securing channel',
+  awaiting_confirmation: 'Confirm fingerprint',
   connected: 'Connected',
   error: 'Connection lost',
 };
@@ -16,6 +17,7 @@ const DOT: Record<ConnectionState, string> = {
   ready: 'bg-dim',
   hole_punching: 'bg-warn',
   upgrading: 'bg-warn',
+  awaiting_confirmation: 'bg-warn',
   connected: 'bg-accent',
   error: 'bg-danger',
 };

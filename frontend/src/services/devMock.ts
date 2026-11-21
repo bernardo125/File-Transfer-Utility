@@ -141,16 +141,28 @@ export function initWailsMock(): void {
           w.runtime?.EventsEmit?.('p2p:connection-state', { state: 'upgrading', detail: 'QUIC/TLS handshake (mock)' });
         }, 1200);
         setTimeout(() => {
-          w.runtime?.EventsEmit?.('connection:success', {
-            addr: '192.168.1.100:48234',
-            rttMs: 18,
-          });
           w.runtime?.EventsEmit?.('p2p:connection-state', {
-            state: 'connected',
-            detail: 'Conectado a 192.168.1.100:48234 (Mock)',
+            state: 'awaiting_confirmation',
+            detail: 'Compare the fingerprint with your peer and confirm only if it is identical (mock).',
             rttMs: 18,
+            fingerprint: 'A1B2-C3D4-E5F6-0718-293A',
           });
         }, 2500);
+        return undefined;
+      },
+      ConfirmPeerFingerprint: async (match: unknown) => {
+        console.info('[Wails Mock] ConfirmPeerFingerprint:', match);
+        if (!match) {
+          w.runtime?.EventsEmit?.('connection:failed', { reason: 'Pairing refused: the fingerprints did not match (mock).' });
+          w.runtime?.EventsEmit?.('p2p:connection-state', { state: 'error', detail: 'Pairing refused' });
+          return undefined;
+        }
+        w.runtime?.EventsEmit?.('connection:success', { addr: '192.168.1.100:48234', rttMs: 18 });
+        w.runtime?.EventsEmit?.('p2p:connection-state', {
+          state: 'connected',
+          detail: 'Conectado a 192.168.1.100:48234 (Mock)',
+          rttMs: 18,
+        });
         return undefined;
       },
       CancelConnection: async () => {
@@ -257,8 +269,8 @@ export function initWailsMock(): void {
         }, 1500);
         return undefined;
       },
-      RespondIncomingTransfer: async (accept: unknown) => {
-        console.info('[Wails Mock] RespondIncomingTransfer:', accept);
+      RespondIncomingTransfer: async (offerId: unknown, accept: unknown) => {
+        console.info('[Wails Mock] RespondIncomingTransfer:', offerId, accept);
         if (accept) {
           w.runtime?.EventsEmit?.('transfer:status', 'transferring');
           let currentPct = 0;
@@ -302,6 +314,7 @@ export function initWailsMock(): void {
     // Auto-trigger an incoming proposal for receiver in browser mock after connection
     setTimeout(() => {
       w.runtime?.EventsEmit?.('transfer:incoming', {
+        offerId: 'mock-offer-0001',
         fileName: 'document_sample.zip',
         fileSize: 14857600,
         fileHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',

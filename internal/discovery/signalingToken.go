@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
+	"time"
+	"unicode"
 
 	"golang.org/x/crypto/chacha20"
 )
@@ -31,7 +34,14 @@ type connectionCandidates struct {
 func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
 	stunClient := Client{}
 	local_ipv4, public_ipv6 := GetMachineAddrs(conn)
-	stun_response, err := stunClient.SendBindingRequest(conn, DefaultSTUNServers[0])
+	var stun_response *net.UDPAddr
+	var err error
+	for _, server := range DefaultSTUNServers {
+		if stun_response, err = stunClient.SendBindingRequest(conn, server); err == nil {
+			break
+		}
+		log.Printf("[Discovery] STUN server %s failed: %v", server, err)
+	}
 	if err != nil {
 		// No public mapping available (offline / STUN blocked): advertise an unspecified
 		// address so the token is still valid; LAN and IPv6 candidates keep working.
@@ -42,10 +52,20 @@ func CreateKey(conn *net.UDPConn) (key string, private ed25519.PrivateKey) {
 	return BuildToken(local_ipv4, public_ipv6, stun_response, public), priv
 }
 
-// BuildToken serializes the connection candidates into the shareable (obfuscated) token.
+// BuildToken serializes the connection candidates into the shareable v2 token (a public,
+// checksummed identifier, see tokenv2.go).
 // It performs no network I/O, which makes the token format testable without STUN.
 // ipv6 may be nil; local and stun must be IPv4 addresses.
 func BuildToken(local, ipv6, stun *net.UDPAddr, public ed25519.PublicKey) string {
+	return buildTokenV2(local, ipv6, stun, public, time.Now().Add(TokenValidity))
+}
+
+// buildTokenV1 produces the legacy token (obfuscated with a constant key, no checksum, no
+// expiry). It is only kept so the legacy parser stays testable.
+func buildTokenV1(local, ipv6, stun *net.UDPAddr, public ed25519.PublicKey) string {
+	if ipv6 != nil && (len(ipv6.IP) == 0 || ipv6.IP.IsUnspecified()) {
+		ipv6 = nil // no IPv6 connectivity: do not advertise "::"
+	}
 	candidates := connectionCandidates{LocalAddressIPV4: local, PublicAddressIPV6: ipv6, StunPublicAddressIPV4: stun, Ed25519PublicToken: &public}
 	nonce, ciphertext := chacha20Encryct(secret, &candidates)
 	return base64Enconding(append(nonce, ciphertext...))
@@ -61,6 +81,15 @@ func ed55519TokenGen() (public ed25519.PublicKey, priv ed25519.PrivateKey) {
 }
 
 func GetPeer(key string) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
+	t, err := ParseToken(key, time.Now())
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return t.Local, t.Stun, t.IPv6, &t.PublicKey, nil
+}
+
+// parseTokenV1 decodes the legacy token format.
+func parseTokenV1(key string) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAddr, peerPublicIPV6 *net.UDPAddr, publickey *ed25519.PublicKey, err error) {
 	if len(key) < 50 {
 		return nil, nil, nil, nil, fmt.Errorf("That's not a token")
 	}
@@ -75,7 +104,53 @@ func GetPeer(key string) (peerLocalIPV4 *net.UDPAddr, peerRemoteIPV4 *net.UDPAdd
 	}
 	nonce := decodedBytes[:chacha20.NonceSize]
 	cipherText := decodedBytes[chacha20.NonceSize:]
-	return chacha20Decryct(secret, nonce, cipherText)
+	local, remote, v6, pub, err := chacha20Decryct(secret, nonce, cipherText)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if v6, err = validateCandidates(local, remote, v6); err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return local, remote, v6, pub, nil
+}
+
+// validateCandidates rejects candidate addresses that can never be a peer, so a crafted token
+// cannot make the app send probes to multicast/broadcast/port-0 destinations. It returns the IPv6
+// candidate, dropping it when it is the unspecified placeholder older builds put in every token.
+//
+// The STUN address may be 0.0.0.0: that is the documented "no public mapping" marker (STUN was
+// unreachable); it is accepted here and simply never probed.
+func validateCandidates(local, stun, v6 *net.UDPAddr) (*net.UDPAddr, error) {
+	if local == nil || stun == nil {
+		return nil, fmt.Errorf("That's not a token: missing address")
+	}
+	if local.Port == 0 || stun.Port == 0 {
+		return nil, fmt.Errorf("That's not a token: port 0")
+	}
+	if local.IP.IsUnspecified() || local.IP.IsMulticast() || local.IP.Equal(net.IPv4bcast) {
+		return nil, fmt.Errorf("That's not a token: unusable local address %v", local.IP)
+	}
+	if stun.IP.IsMulticast() || stun.IP.Equal(net.IPv4bcast) {
+		return nil, fmt.Errorf("That's not a token: unusable public address %v", stun.IP)
+	}
+	if v6 == nil || v6.IP.IsUnspecified() {
+		return nil, nil
+	}
+	if v6.Port == 0 || v6.IP.IsMulticast() {
+		return nil, fmt.Errorf("That's not a token: unusable IPv6 address")
+	}
+	return v6, nil
+}
+
+// CleanToken removes whitespace and invisible formatting characters that creep in when a token
+// is copied from a chat or a web page. Tokens never contain any.
+func CleanToken(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // ENCRYPTATION BASED ON Chacha20

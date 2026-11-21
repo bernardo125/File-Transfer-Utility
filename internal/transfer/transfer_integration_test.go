@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,7 +36,7 @@ func runTransfer(t *testing.T, ca, cb *quic.Conn, srcPath, dest string, expectSi
 	sc, rc := make(chan sendResult, 1), make(chan recvResult, 1)
 	go func() { sc <- sendResult{SendFile(f, ca, nil)} }()
 	go func() {
-		n, err := ReceiveFile(dest, cb, expectSize, expectHash, onRecv)
+		_, n, err := ReceiveFile(filepath.Dir(dest), filepath.Base(dest), cb, expectSize, expectHash, onRecv)
 		rc <- recvResult{n, err}
 	}()
 	var s sendResult
@@ -113,16 +114,16 @@ func TestReceiveRejectsTruncatedPayload(t *testing.T) {
 }
 
 // Detects: a sender streaming more than it announced growing the receiver's disk usage (the
-// receiver used to disable its limit when the announced size was 0). Only the receiver is
-// asserted: a sender that over-sends is left blocked by QUIC flow control (documented limitation).
-func TestReceiveNeverWritesMoreThanAnnouncedSize(t *testing.T) {
+// receiver used to disable its limit when the announced size was 0). The receiver must stop at
+// the announced size, treat the surplus as a protocol violation (F-14) and keep no file. Only the
+// receiver is asserted: a sender that over-sends is left blocked by QUIC flow control.
+func TestReceiveRejectsAndNeverStoresMoreThanAnnouncedSize(t *testing.T) {
 	for _, announced := range []int64{0, 1000} {
 		t.Run(fmt.Sprintf("announced_%d", announced), func(t *testing.T) {
 			ca, cb := testutil.DirectPair(t)
 			dir := t.TempDir()
 			src, _ := testutil.WriteFile(t, dir, "big.bin", 2<<20, 5)
 			_, wantSum := testutil.WriteFile(t, dir, "prefix.bin", announced, 5) // same stream => same prefix
-			dest := filepath.Join(dir, "dest.bin")
 			f, err := os.Open(src)
 			if err != nil {
 				t.Fatal(err)
@@ -132,21 +133,24 @@ func TestReceiveNeverWritesMoreThanAnnouncedSize(t *testing.T) {
 			go SendFile(f, ca, nil) // blocks on flow control once the receiver stops reading
 			rc := make(chan recvResult, 1)
 			go func() {
-				n, err := ReceiveFile(dest, cb, announced, wantSum, nil)
+				_, n, err := ReceiveFile(dir, "dest.bin", cb, announced, wantSum, nil)
 				rc <- recvResult{n, err}
 			}()
 			select {
 			case r := <-rc:
-				if r.err != nil {
-					t.Fatalf("receiver should accept exactly the announced prefix: %v", r.err)
+				if !errors.Is(r.err, ErrIntegrity) {
+					t.Fatalf("surplus data must be an integrity error, got %v", r.err)
+				}
+				if r.n > announced {
+					t.Fatalf("wrote %d bytes, more than the announced %d", r.n, announced)
 				}
 			case <-time.After(guard):
 				t.Fatal("receiver did not finish")
 			}
-			st, err := os.Stat(dest)
-			if err != nil || st.Size() != announced {
-				t.Fatalf("dest size=%v err=%v, want exactly %d bytes", st, err, announced)
+			if _, err := os.Stat(filepath.Join(dir, "dest.bin")); !os.IsNotExist(err) {
+				t.Fatalf("file kept although the sender over-sent (stat err=%v)", err)
 			}
+			assertNoPartFiles(t, dir)
 		})
 	}
 }
@@ -202,7 +206,7 @@ func TestConcurrentTransfersAreIsolated(t *testing.T) {
 			defer f.Close()
 			sc := make(chan error, 1)
 			go func() { sc <- SendFile(f, ca, nil) }()
-			if _, err := ReceiveFile(dest, cb, size, sum, nil); err != nil {
+			if _, _, err := ReceiveFile(filepath.Dir(dest), filepath.Base(dest), cb, size, sum, nil); err != nil {
 				errs <- fmt.Errorf("pair %d recv: %w", i, err)
 				return
 			}
